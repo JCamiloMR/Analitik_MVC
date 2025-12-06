@@ -1,8 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using Analitik_MVC.Enums;
 
 namespace Analitik_MVC.Models;
 
+/// <summary>
+/// Base de clientes
+/// </summary>
 public partial class Cliente
 {
     public Guid Id { get; set; }
@@ -12,6 +16,8 @@ public partial class Cliente
     public string CodigoCliente { get; set; } = null!;
 
     public string Nombre { get; set; } = null!;
+
+    public TipoCliente TipoCliente { get; set; }
 
     public string? DocumentoIdentificacion { get; set; }
 
@@ -48,4 +54,6 @@ public partial class Cliente
     public DateTime UpdatedAt { get; set; }
 
     public virtual Empresa Empresa { get; set; } = null!;
+
+    public virtual ICollection<Venta> Venta { get; set; } = new List<Venta>();
 }

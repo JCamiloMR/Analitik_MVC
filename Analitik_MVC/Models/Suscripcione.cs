@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Analitik_MVC.Enums;
 
 namespace Analitik_MVC.Models;
 
@@ -11,6 +12,10 @@ public partial class Suscripcione
     public Guid Id { get; set; }
 
     public Guid EmpresaId { get; set; }
+
+    public PlanSuscripcion Plan { get; set; }
+
+    public EstadoSuscripcion Estado { get; set; }
 
     public DateOnly FechaInicio { get; set; }
 

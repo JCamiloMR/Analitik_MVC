@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Analitik_MVC.Enums;
 
 namespace Analitik_MVC.Models;
 
@@ -11,6 +12,10 @@ public partial class ConfiguracionEmpresa
     public Guid Id { get; set; }
 
     public Guid EmpresaId { get; set; }
+
+    public Tema Tema { get; set; }
+
+    public Idioma Idioma { get; set; }
 
     public string ZonaHoraria { get; set; } = null!;
 
@@ -33,6 +38,8 @@ public partial class ConfiguracionEmpresa
     public bool NotificacionesMarketing { get; set; }
 
     public bool NotificacionesSeguridad { get; set; }
+
+    public FrecuenciaReporte FrecuenciaReportes { get; set; }
 
     public string? ConfiguracionPrivacidad { get; set; }
 

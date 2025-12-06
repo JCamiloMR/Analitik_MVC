@@ -62,5 +62,7 @@ public partial class CuentaEmpresa
 
     public bool EsOwner { get; set; }
 
+    public virtual ICollection<Auditorium> Auditoria { get; set; } = new List<Auditorium>();
+
     public virtual Empresa Empresa { get; set; } = null!;
 }
