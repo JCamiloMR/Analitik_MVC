@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Analitik_MVC.Enums;
 using Analitik_MVC.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -70,7 +71,7 @@ public partial class AnalitikDbContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseNpgsql("Host=localhost;Database=Analitik;Username=postgres;Password=postgres");
+        => optionsBuilder.UseNpgsql("Host=localhost;Port=5432;Database=Analitik;Username=postgres;Password=Camilo1307");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -99,8 +100,8 @@ public partial class AnalitikDbContext : DbContext
             .HasPostgresEnum("tipo_plan_suscripcion", new[] { "basico", "profesional", "empresarial" })
             .HasPostgresEnum("tipo_prioridad", new[] { "baja", "media", "alta", "critica" })
             .HasPostgresEnum("tipo_recomendacion", new[] { "alerta", "oportunidad", "optimizacion", "tendencia" })
-            .HasPostgresEnum("tipo_sector_empresa", new[] { "comercio", "manufactura", "servicios", "tecnologia", "confecciones", "alimentos", "salud", "educacion", "otro" })
-            .HasPostgresEnum("tipo_tamano_empresa", new[] { "micro", "pequena", "mediana" })
+            .HasPostgresEnum<SectorEmpresa>("tipo_sector_empresa")
+            .HasPostgresEnum<TamanoEmpresa>("tipo_tamano_empresa")    
             .HasPostgresEnum("tipo_tema", new[] { "claro", "oscuro", "automatico" })
             .HasPostgresEnum("tipo_tendencia", new[] { "up", "down", "neutral" })
             .HasPostgresEnum("tipo_tendencia_producto", new[] { "creciente", "estable", "decreciente" })
@@ -108,6 +109,8 @@ public partial class AnalitikDbContext : DbContext
             .HasPostgresExtension("pg_trgm")
             .HasPostgresExtension("pgcrypto")
             .HasPostgresExtension("uuid-ossp");
+
+
 
         modelBuilder.Entity<AnalisisProducto>(entity =>
         {
@@ -953,11 +956,14 @@ public partial class AnalitikDbContext : DbContext
                 .HasDefaultValue(true)
                 .HasColumnName("activa");
             entity.Property(e => e.Sector)
-                .HasConversion<string>()
-                .HasColumnName("sector");
+                .HasColumnName("sector")
+                .HasColumnType("tipo_sector_empresa")
+                .IsRequired();
+
             entity.Property(e => e.Tamano)
-                .HasConversion<string>()
-                .HasColumnName("tamano");
+                .HasColumnName("tamano")
+                .HasColumnType("tipo_tamano_empresa")
+                .IsRequired();
             entity.Property(e => e.Ciudad)
                 .HasMaxLength(100)
                 .HasColumnName("ciudad");

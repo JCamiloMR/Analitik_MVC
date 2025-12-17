@@ -20,9 +20,9 @@ public partial class Empresa
     /// </summary>
     public string? Nit { get; set; }
 
-    public SectorEmpresa Sector { get; set; }
+    public string Sector { get; set; }
 
-    public TamanoEmpresa Tamano { get; set; }
+    public string Tamano { get; set; }
 
     public string DirectorNombreCompleto { get; set; } = null!;
 

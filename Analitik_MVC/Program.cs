@@ -1,35 +1,37 @@
-using Analitik_MVC.Models;
+﻿using Analitik_MVC.Data;
+using Analitik_MVC.Enums;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
 builder.Services.AddControllersWithViews();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-builder.Services.AddDbContext<AnalitikContext>(options =>
-    options.UseNpgsql(connectionString));
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new Exception("ConnectionString DefaultConnection es NULL");
+}
+
+// 🔑 Construir DataSource UNA sola vez
+var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+dataSourceBuilder.MapEnum<SectorEmpresa>("tipo_sector_empresa");
+dataSourceBuilder.MapEnum<TamanoEmpresa>("tipo_tamano_empresa");
+
+var dataSource = dataSourceBuilder.Build();
+
+// 🔑 Pasar el DataSource ya construido
+builder.Services.AddDbContext<AnalitikDbContext>(options =>
+{
+    options.UseNpgsql(dataSource);
+});
 
 var app = builder.Build();
 
-
-
-
-
-// Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
-}
-
 app.UseHttpsRedirection();
 app.UseStaticFiles();
-
 app.UseRouting();
-
 app.UseAuthorization();
 
 app.MapControllerRoute(

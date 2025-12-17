@@ -404,6 +404,16 @@ public partial class AnalitikContext : DbContext
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnName("updated_at");
+            entity.Property(e => e.Sector)
+                .HasConversion<string>() // enum <-> text
+                .HasColumnType("tipo_sector_empresa") // enum de postgres
+                .HasColumnName("sector");
+
+            entity.Property(e => e.Tamano)
+                .HasConversion<string>()
+                .HasColumnType("tipo_tamano_empresa")
+                .HasColumnName("tamano");
+
         });
 
         modelBuilder.Entity<Suscripcione>(entity =>
