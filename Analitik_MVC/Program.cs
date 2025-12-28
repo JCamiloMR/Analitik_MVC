@@ -1,5 +1,8 @@
 ﻿using Analitik_MVC.Data;
 using Analitik_MVC.Enums;
+using Analitik_MVC.Services.Data;
+using Analitik_MVC.Services.Database;
+using Analitik_MVC.Services.Excel;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -26,6 +29,13 @@ builder.Services.AddDbContext<AnalitikDbContext>(options =>
 {
     options.UseNpgsql(dataSource);
 });
+
+// ✅ REGISTRAR SERVICIOS DE IMPORTACIÓN ETL
+builder.Services.AddScoped<ExcelValidationService>();
+builder.Services.AddScoped<ExcelReaderService>();
+builder.Services.AddScoped<DataTransformationService>();
+builder.Services.AddScoped<DatabaseLoaderService>();
+builder.Services.AddScoped<ImportLogService>();
 
 var app = builder.Build();
 
