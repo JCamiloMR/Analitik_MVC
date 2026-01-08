@@ -49,6 +49,8 @@ public partial class AnalitikDbContext : DbContext
 
     public virtual DbSet<ImportacionesDato> ImportacionesDatos { get; set; }
 
+    public virtual DbSet<ImportacionDatos> ImportacionesDatosLogs { get; set; }
+
     public virtual DbSet<Inventario> Inventarios { get; set; }
 
     public virtual DbSet<MensajesIum> MensajesIa { get; set; }
@@ -1203,6 +1205,103 @@ public partial class AnalitikDbContext : DbContext
                 .HasForeignKey(d => d.FuenteDatosId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("importaciones_datos_fuente_datos_id_fkey");
+        });
+
+        // Nueva tabla para logs simplificados de import
+        modelBuilder.Entity<ImportacionDatos>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("importacion_datos_logs_pkey");
+
+            entity.ToTable("importacion_datos_logs", tb => tb.HasComment("Logs simplificados de importaciones Excel"));
+
+            entity.HasIndex(e => e.EmpresaId, "idx_import_logs_empresa");
+            entity.HasIndex(e => e.FechaImportacion, "idx_import_logs_fecha").IsDescending();
+            entity.HasIndex(e => e.Estado, "idx_import_logs_estado");
+            entity.HasIndex(e => e.HashArchivo, "idx_import_logs_hash");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.EmpresaId)
+                .IsRequired()
+                .HasColumnName("empresa_id");
+            entity.Property(e => e.NombreArchivo)
+                .IsRequired()
+                .HasMaxLength(255)
+                .HasColumnName("nombre_archivo");
+            entity.Property(e => e.TamanoArchivo)
+                .HasColumnName("tamano_archivo");
+            entity.Property(e => e.HashArchivo)
+                .HasMaxLength(64)
+                .HasColumnName("hash_archivo");
+            entity.Property(e => e.TipoDatos)
+                .HasMaxLength(100)
+                .HasColumnName("tipo_datos");
+            entity.Property(e => e.Estado)
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasDefaultValueSql("'en_proceso'::character varying")
+                .HasColumnName("estado");
+            entity.Property(e => e.FaseActual)
+                .HasMaxLength(50)
+                .HasColumnName("fase_actual");
+            entity.Property(e => e.ProgresoPorcentaje)
+                .HasDefaultValue(0)
+                .HasColumnName("progreso_porcentaje");
+            entity.Property(e => e.RegistrosExtraidos)
+                .HasDefaultValue(0)
+                .HasColumnName("registros_extraidos");
+            entity.Property(e => e.RegistrosTransformados)
+                .HasDefaultValue(0)
+                .HasColumnName("registros_transformados");
+            entity.Property(e => e.RegistrosCargados)
+                .HasDefaultValue(0)
+                .HasColumnName("registros_cargados");
+            entity.Property(e => e.RegistrosRechazados)
+                .HasDefaultValue(0)
+                .HasColumnName("registros_rechazados");
+            entity.Property(e => e.ErroresExtraccion)
+                .HasColumnType("jsonb")
+                .HasDefaultValueSql("'[]'::jsonb")
+                .HasColumnName("errores_extraccion");
+            entity.Property(e => e.ErroresTransformacion)
+                .HasColumnType("jsonb")
+                .HasDefaultValueSql("'[]'::jsonb")
+                .HasColumnName("errores_transformacion");
+            entity.Property(e => e.ErroresCarga)
+                .HasColumnType("jsonb")
+                .HasDefaultValueSql("'[]'::jsonb")
+                .HasColumnName("errores_carga");
+            entity.Property(e => e.Advertencias)
+                .HasColumnType("jsonb")
+                .HasDefaultValueSql("'[]'::jsonb")
+                .HasColumnName("advertencias");
+            entity.Property(e => e.FechaImportacion)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnName("fecha_importacion");
+            entity.Property(e => e.FechaInicioEtl)
+                .HasColumnName("fecha_inicio_etl");
+            entity.Property(e => e.FechaFinEtl)
+                .HasColumnName("fecha_fin_etl");
+            entity.Property(e => e.DuracionSegundos)
+                .HasColumnName("duracion_segundos");
+            entity.Property(e => e.ResultadoCarga)
+                .HasColumnType("jsonb")
+                .HasColumnName("resultado_carga");
+            entity.Property(e => e.LogCompleto)
+                .HasColumnName("log_completo");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Empresa)
+                .WithMany()
+                .HasForeignKey(d => d.EmpresaId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_import_logs_empresa");
         });
 
         modelBuilder.Entity<Inventario>(entity =>

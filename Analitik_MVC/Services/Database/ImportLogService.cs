@@ -34,17 +34,16 @@ public class ImportLogService
         long tamanoArchivo,
         Stream archivoStream)
     {
-        var importacion = new ImportacionesDato
+        var importacion = new ImportacionDatos
         {
             Id = Guid.NewGuid(),
             EmpresaId = empresaId,
-            TipoFuente = FuenteDatos.Excel,
-            TipoDatos = DatosImportacion.Mixto,
+            TipoDatos = "mixto",
             NombreArchivo = nombreArchivo,
             TamanoArchivo = tamanoArchivo,
             HashArchivo = await CalcularHashArchivoAsync(archivoStream),
-            Estado = EstadoImportacion.EnProceso,
-            FaseActual = FaseEtl.Extraccion,
+            Estado = "en_proceso",
+            FaseActual = "extraccion",
             ProgresoPorcentaje = 0,
             FechaImportacion = DateTime.UtcNow,
             FechaInicioEtl = DateTime.UtcNow,
@@ -52,7 +51,7 @@ public class ImportLogService
             UpdatedAt = DateTime.UtcNow
         };
 
-        await _dbContext.ImportacionesDatos.AddAsync(importacion);
+        await _dbContext.ImportacionesDatosLogs.AddAsync(importacion);
         await _dbContext.SaveChangesAsync();
 
         return importacion.Id;
@@ -63,12 +62,12 @@ public class ImportLogService
     /// </summary>
     public async Task ActualizarEstadoImportacionAsync(
         Guid importacionId,
-        EstadoImportacion estado,
-        FaseEtl fase,
+        string estado,
+        string fase,
         decimal? progreso = null,
         string? errores = null)
     {
-        var importacion = await _dbContext.ImportacionesDatos.FindAsync(importacionId);
+        var importacion = await _dbContext.ImportacionesDatosLogs.FindAsync(importacionId);
         if (importacion == null)
         {
             _logger.LogWarning("Importación {Id} no encontrada", importacionId);
@@ -78,7 +77,7 @@ public class ImportLogService
         importacion.Estado = estado;
         importacion.FaseActual = fase;
         if (progreso.HasValue)
-            importacion.ProgresoPorcentaje = progreso.Value;
+            importacion.ProgresoPorcentaje = (int)progreso.Value;
 
         if (!string.IsNullOrWhiteSpace(errores))
         {
@@ -87,7 +86,7 @@ public class ImportLogService
 
         importacion.UpdatedAt = DateTime.UtcNow;
 
-        _dbContext.ImportacionesDatos.Update(importacion);
+        _dbContext.ImportacionesDatosLogs.Update(importacion);
         await _dbContext.SaveChangesAsync();
     }
 
@@ -99,11 +98,11 @@ public class ImportLogService
         ResumenImportacion resumen,
         List<string>? advertencias = null)
     {
-        var importacion = await _dbContext.ImportacionesDatos.FindAsync(importacionId);
+        var importacion = await _dbContext.ImportacionesDatosLogs.FindAsync(importacionId);
         if (importacion == null) return;
 
-        importacion.Estado = EstadoImportacion.Completado;
-        importacion.FaseActual = FaseEtl.Completado;
+        importacion.Estado = "completado";
+        importacion.FaseActual = "completado";
         importacion.ProgresoPorcentaje = 100;
         importacion.FechaFinEtl = DateTime.UtcNow;
         importacion.DuracionSegundos = (int)resumen.DuracionSegundos;
@@ -130,7 +129,7 @@ public class ImportLogService
 
         importacion.UpdatedAt = DateTime.UtcNow;
 
-        _dbContext.ImportacionesDatos.Update(importacion);
+        _dbContext.ImportacionesDatosLogs.Update(importacion);
         await _dbContext.SaveChangesAsync();
 
         _logger.LogInformation(
@@ -146,13 +145,13 @@ public class ImportLogService
     public async Task RegistrarCargaFallidaAsync(
         Guid importacionId,
         List<ErrorValidacion> errores,
-        FaseEtl faseError,
+        string faseError,
         string mensajeError)
     {
-        var importacion = await _dbContext.ImportacionesDatos.FindAsync(importacionId);
+        var importacion = await _dbContext.ImportacionesDatosLogs.FindAsync(importacionId);
         if (importacion == null) return;
 
-        importacion.Estado = EstadoImportacion.Fallido;
+        importacion.Estado = "fallido";
         importacion.FaseActual = faseError;
         importacion.FechaFinEtl = DateTime.UtcNow;
         importacion.DuracionSegundos = (int)(DateTime.UtcNow - importacion.FechaInicioEtl!.Value).TotalSeconds;
@@ -160,15 +159,15 @@ public class ImportLogService
         // Clasificar errores por fase
         var erroresJson = JsonSerializer.Serialize(errores, new JsonSerializerOptions { WriteIndented = true });
 
-        switch (faseError)
+        switch (faseError.ToLower())
         {
-            case FaseEtl.Extraccion:
+            case "extraccion":
                 importacion.ErroresExtraccion = erroresJson;
                 break;
-            case FaseEtl.Transformacion:
+            case "transformacion":
                 importacion.ErroresTransformacion = erroresJson;
                 break;
-            case FaseEtl.Carga:
+            case "carga":
                 importacion.ErroresCarga = erroresJson;
                 break;
         }
@@ -177,7 +176,7 @@ public class ImportLogService
         {
             exitoso = false,
             mensaje = mensajeError,
-            fase_error = faseError.ToString(),
+            fase_error = faseError,
             total_errores = errores.Count,
             errores = errores
         }, new JsonSerializerOptions { WriteIndented = true });
@@ -185,7 +184,7 @@ public class ImportLogService
         importacion.ResultadoCarga = resultadoCarga;
         importacion.UpdatedAt = DateTime.UtcNow;
 
-        _dbContext.ImportacionesDatos.Update(importacion);
+        _dbContext.ImportacionesDatosLogs.Update(importacion);
         await _dbContext.SaveChangesAsync();
 
         _logger.LogError(
@@ -200,7 +199,7 @@ public class ImportLogService
     /// </summary>
     public async Task<ImportReportDTO?> GenerarReporteAsync(Guid importacionId)
     {
-        var importacion = await _dbContext.ImportacionesDatos.FindAsync(importacionId);
+        var importacion = await _dbContext.ImportacionesDatosLogs.FindAsync(importacionId);
         if (importacion == null) return null;
 
         var reporte = new ImportReportDTO
@@ -208,7 +207,7 @@ public class ImportLogService
             ImportId = importacion.Id,
             FechaCarga = importacion.FechaImportacion,
             EmpresaId = importacion.EmpresaId,
-            Estado = importacion.Estado.ToString(),
+            Estado = importacion.Estado,
             NombreArchivo = importacion.NombreArchivo,
             ResultadoDetallado = importacion.ResultadoCarga ?? "Sin resultado",
             ErroresPorHoja = new Dictionary<string, List<ErrorValidacion>>()
