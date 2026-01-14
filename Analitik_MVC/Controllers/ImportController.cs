@@ -130,7 +130,7 @@ public class ImportController : ControllerBase
                             Error = $"Error al abrir Excel: {ex.Message}"
                         }
                     },
-                    FaseEtl.Extraccion,
+                    FaseEtl.Extraccion.ToString(),
                     "Error al abrir archivo Excel");
 
                 return BadRequest(new ImportResultDTO
@@ -157,7 +157,7 @@ public class ImportController : ControllerBase
                 await _importLogService.RegistrarCargaFallidaAsync(
                     importacionId.Value,
                     validacionEstructura.Errors,
-                    FaseEtl.Extraccion,
+                    FaseEtl.Extraccion.ToString(),
                     "Error en estructura de hojas");
 
                 return BadRequest(new ImportResultDTO
@@ -173,8 +173,8 @@ public class ImportController : ControllerBase
             // Actualizar progreso
             await _importLogService.ActualizarEstadoImportacionAsync(
                 importacionId.Value,
-                EstadoImportacion.EnProceso,
-                FaseEtl.Transformacion,
+                EstadoImportacion.EnProceso.ToString(),
+                FaseEtl.Transformacion.ToString(),
                 progreso: 25);
 
             // ======================================
@@ -192,7 +192,7 @@ public class ImportController : ControllerBase
                 await _importLogService.RegistrarCargaFallidaAsync(
                     importacionId.Value,
                     validacionProductos.Errors,
-                    FaseEtl.Transformacion,
+                    FaseEtl.Transformacion.ToString(),
                     "Errores en hoja PRODUCTOS");
 
                 return BadRequest(new ImportResultDTO
@@ -210,8 +210,8 @@ public class ImportController : ControllerBase
             // Actualizar progreso
             await _importLogService.ActualizarEstadoImportacionAsync(
                 importacionId.Value,
-                EstadoImportacion.EnProceso,
-                FaseEtl.Transformacion,
+                EstadoImportacion.EnProceso.ToString(),
+                FaseEtl.Transformacion.ToString(),
                 progreso: 40);
 
             // 3.2 Leer INVENTARIO
@@ -226,7 +226,7 @@ public class ImportController : ControllerBase
                 await _importLogService.RegistrarCargaFallidaAsync(
                     importacionId.Value,
                     validacionInventario.Errors,
-                    FaseEtl.Transformacion,
+                    FaseEtl.Transformacion.ToString(),
                     "Errores en hoja INVENTARIO");
 
                 return BadRequest(new ImportResultDTO
@@ -244,8 +244,8 @@ public class ImportController : ControllerBase
             // Actualizar progreso
             await _importLogService.ActualizarEstadoImportacionAsync(
                 importacionId.Value,
-                EstadoImportacion.EnProceso,
-                FaseEtl.Transformacion,
+                EstadoImportacion.EnProceso.ToString(),
+                FaseEtl.Transformacion.ToString(),
                 progreso: 55);
 
             // 3.3 Leer VENTAS
@@ -260,7 +260,7 @@ public class ImportController : ControllerBase
                 await _importLogService.RegistrarCargaFallidaAsync(
                     importacionId.Value,
                     validacionVentas.Errors,
-                    FaseEtl.Transformacion,
+                    FaseEtl.Transformacion.ToString(),
                     "Errores en hoja VENTAS");
 
                 return BadRequest(new ImportResultDTO
@@ -278,8 +278,8 @@ public class ImportController : ControllerBase
             // Actualizar progreso
             await _importLogService.ActualizarEstadoImportacionAsync(
                 importacionId.Value,
-                EstadoImportacion.EnProceso,
-                FaseEtl.Transformacion,
+                EstadoImportacion.EnProceso.ToString(),
+                FaseEtl.Transformacion.ToString(),
                 progreso: 70);
 
             // 3.4 Leer FINANCIEROS
@@ -293,7 +293,7 @@ public class ImportController : ControllerBase
                 await _importLogService.RegistrarCargaFallidaAsync(
                     importacionId.Value,
                     validacionFinancieros.Errors,
-                    FaseEtl.Transformacion,
+                    FaseEtl.Transformacion.ToString(),
                     "Errores en hoja FINANCIEROS");
 
                 return BadRequest(new ImportResultDTO
@@ -313,8 +313,8 @@ public class ImportController : ControllerBase
             // ======================================
             await _importLogService.ActualizarEstadoImportacionAsync(
                 importacionId.Value,
-                EstadoImportacion.EnProceso,
-                FaseEtl.Carga,
+                EstadoImportacion.EnProceso.ToString(),
+                FaseEtl.Carga.ToString(),
                 progreso: 85);
 
             ResumenImportacion resumen;
@@ -342,7 +342,7 @@ public class ImportController : ControllerBase
                             Sugerencia = "Contacta soporte si el problema persiste"
                         }
                     },
-                    FaseEtl.Carga,
+                    FaseEtl.Carga.ToString(),
                     $"Error en carga: {ex.Message}");
 
                 return StatusCode(500, new ImportResultDTO
@@ -399,7 +399,7 @@ public class ImportController : ControllerBase
                             Error = $"Error inesperado: {ex.Message}"
                         }
                     },
-                    FaseEtl.Error,
+                    FaseEtl.Error.ToString(),
                     ex.Message);
             }
 
