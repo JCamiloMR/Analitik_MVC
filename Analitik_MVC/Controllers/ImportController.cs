@@ -105,7 +105,8 @@ public class ImportController : ControllerBase
                 empresaId,
                 archivo.FileName,
                 archivo.Length,
-                archivoStream, DateTimeOffset.UtcNow);
+                archivoStream, 
+                DateTime.UtcNow); // Cambiado de DateTimeOffset a DateTime
 
             _logger.LogInformation("Importación {ImportId} registrada", importacionId);
 

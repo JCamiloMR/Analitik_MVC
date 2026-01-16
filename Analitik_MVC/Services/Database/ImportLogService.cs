@@ -32,7 +32,8 @@ public class ImportLogService
         Guid empresaId,
         string nombreArchivo,
         long tamanoArchivo,
-        Stream archivoStream, DateTime? utcNow)
+        Stream archivoStream, 
+        DateTime? utcNow)
     {
         var importacion = new ImportacionesDatosLogs
         {
@@ -45,10 +46,10 @@ public class ImportLogService
             Estado = "en_proceso",
             FaseActual = "extraccion",
             ProgresoPorcentaje = 0,
-            FechaImportacion = (DateTime)utcNow,
-            FechaInicioEtl = utcNow,
-            CreatedAt = (DateTime)utcNow,
-            UpdatedAt = (DateTime)utcNow
+            FechaImportacion = DateTimeOffset.FromFileTime(utcNow?.ToFileTime() ?? DateTime.UtcNow.ToFileTime()),
+            FechaInicioEtl = DateTimeOffset.FromFileTime(utcNow?.ToFileTime() ?? DateTime.UtcNow.ToFileTime()),
+            CreatedAt = DateTimeOffset.FromFileTime(utcNow?.ToFileTime() ?? DateTime.UtcNow.ToFileTime()),
+            UpdatedAt = DateTimeOffset.FromFileTime(utcNow?.ToFileTime() ?? DateTime.UtcNow.ToFileTime())
         };
 
         await _dbContext.ImportacionesDatosLogs.AddAsync(importacion);
@@ -84,7 +85,7 @@ public class ImportLogService
             importacion.ErroresCarga = errores;
         }
 
-        importacion.UpdatedAt = DateTime.UtcNow;
+        importacion.UpdatedAt = DateTimeOffset.UtcNow;
 
         _dbContext.ImportacionesDatosLogs.Update(importacion);
         await _dbContext.SaveChangesAsync();
@@ -104,7 +105,7 @@ public class ImportLogService
         importacion.Estado = "completado";
         importacion.FaseActual = "completado";
         importacion.ProgresoPorcentaje = 100;
-        importacion.FechaFinEtl = DateTime.UtcNow;
+        importacion.FechaFinEtl = DateTimeOffset.UtcNow;
         importacion.DuracionSegundos = (int)resumen.DuracionSegundos;
 
         importacion.RegistrosExtraidos = resumen.RegistrosProcesados;
@@ -127,7 +128,7 @@ public class ImportLogService
             importacion.Advertencias = JsonSerializer.Serialize(advertencias);
         }
 
-        importacion.UpdatedAt = DateTime.UtcNow;
+        importacion.UpdatedAt = DateTimeOffset.UtcNow;
 
         _dbContext.ImportacionesDatosLogs.Update(importacion);
         await _dbContext.SaveChangesAsync();
@@ -151,25 +152,17 @@ public class ImportLogService
         var importacion = await _dbContext.ImportacionesDatosLogs.FindAsync(importacionId);
         if (importacion == null) return;
 
-  
-
         importacion.Estado = "fallido";
         importacion.FaseActual = faseError;
-        importacion.FechaFinEtl = DateTime.UtcNow;
+        importacion.FechaFinEtl = DateTimeOffset.UtcNow;
 
-        // 🔥 ESTE ERA EL PROBLEMA
+        // Calcular duración usando DateTimeOffset
         if (importacion.FechaInicioEtl.HasValue)
         {
-            importacion.FechaInicioEtl = importacion.FechaInicioEtl.Value.ToUniversalTime();
+            importacion.DuracionSegundos = (int)(DateTimeOffset.UtcNow - importacion.FechaInicioEtl.Value).TotalSeconds;
         }
 
-        importacion.DuracionSegundos =
-            (int)(DateTime.UtcNow - importacion.FechaInicioEtl.Value).TotalSeconds;
-
-        importacion.UpdatedAt = DateTime.UtcNow;
-
-  
-
+        importacion.UpdatedAt = DateTimeOffset.UtcNow;
 
         // Clasificar errores por fase
         var erroresJson = JsonSerializer.Serialize(errores, new JsonSerializerOptions { WriteIndented = true });
@@ -197,28 +190,9 @@ public class ImportLogService
         }, new JsonSerializerOptions { WriteIndented = true });
 
         importacion.ResultadoCarga = resultadoCarga;
-        importacion.UpdatedAt = DateTime.UtcNow;
+        importacion.UpdatedAt = DateTimeOffset.UtcNow;
 
         _dbContext.ImportacionesDatosLogs.Update(importacion);
-
-        foreach (var entry in _dbContext.ChangeTracker.Entries())
-        {
-            foreach (var prop in entry.Properties)
-            {
-                if (prop.CurrentValue is DateTime dt)
-                {
-                    Console.WriteLine(
-                        $"{entry.Entity.GetType().Name}.{prop.Metadata.Name} = {dt.Kind}");
-                }
-                else if (prop.CurrentValue is DateTime nullableDt && nullableDt != default)
-                {
-                    Console.WriteLine(
-                        $"{entry.Entity.GetType().Name}.{prop.Metadata.Name} = {nullableDt.Kind}");
-                }
-            }
-        }
-
-
         await _dbContext.SaveChangesAsync();
 
         _logger.LogError(
@@ -299,10 +273,5 @@ public class ImportLogService
         archivoStream.Position = 0;
         
         return Convert.ToHexString(hashBytes);
-    }
-
-    internal async Task<Guid?> RegistrarImportacionAsync(Guid empresaId, string fileName, long length, Stream archivoStream, DateTimeOffset utcNow)
-    {
-        throw new NotImplementedException();
     }
 }
