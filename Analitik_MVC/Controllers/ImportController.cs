@@ -50,9 +50,11 @@ public class ImportController : ControllerBase
     /// </summary>
     [HttpPost("excel")]
     [RequestSizeLimit(10 * 1024 * 1024)] // 10 MB límite
-    public async Task<IActionResult> ImportarExcel([FromForm] IFormFile archivo, [FromForm] Guid empresaId)
+    public async Task<IActionResult> ImportarExcel([FromForm] IFormFile archivo)
     {
-        _logger.LogInformation("Iniciando importación de Excel para empresa {EmpresaId}", empresaId);
+        Guid empresaId = Guid.Parse("38950573-d769-49e3-a3f8-71bc6362508a");
+        Guid id_empresa = Guid.Parse("922096db-178b-457f-bcc3-d217761f093e");
+        _logger.LogInformation($"Iniciando importación de Excel para empresa {empresaId}");
 
         if (archivo == null || archivo.Length == 0)
         {
@@ -103,7 +105,7 @@ public class ImportController : ControllerBase
                 empresaId,
                 archivo.FileName,
                 archivo.Length,
-                archivoStream);
+                archivoStream, DateTimeOffset.UtcNow);
 
             _logger.LogInformation("Importación {ImportId} registrada", importacionId);
 
@@ -185,7 +187,7 @@ public class ImportController : ControllerBase
 
             // 3.1 Leer PRODUCTOS
             var hojaProductos = workbook.Worksheet("PRODUCTOS");
-            var (productos, validacionProductos) = _excelReaderService.LeerYMapearProductos(hojaProductos, empresaId);
+            var (productos, validacionProductos) = _excelReaderService.LeerYMapearProductos(hojaProductos, id_empresa);
             
             if (!validacionProductos.IsSuccess)
             {
@@ -219,7 +221,7 @@ public class ImportController : ControllerBase
             var (inventarios, validacionInventario) = _excelReaderService.LeerYMapearInventario(
                 hojaInventario, 
                 productos, 
-                empresaId);
+                id_empresa);
 
             if (!validacionInventario.IsSuccess)
             {
@@ -253,7 +255,7 @@ public class ImportController : ControllerBase
             var (ventas, validacionVentas) = _excelReaderService.LeerYMapearVentas(
                 hojaVentas, 
                 productos, 
-                empresaId);
+                id_empresa);
 
             if (!validacionVentas.IsSuccess)
             {
@@ -286,7 +288,7 @@ public class ImportController : ControllerBase
             var hojaFinancieros = workbook.Worksheet("FINANCIEROS");
             var (financieros, validacionFinancieros) = _excelReaderService.LeerYMapearFinancieros(
                 hojaFinancieros, 
-                empresaId);
+                id_empresa);
 
             if (!validacionFinancieros.IsSuccess)
             {
@@ -325,7 +327,7 @@ public class ImportController : ControllerBase
                     inventarios,
                     ventas,
                     financieros,
-                    empresaId);
+                    id_empresa);
             }
             catch (Exception ex)
             {
@@ -428,6 +430,7 @@ public class ImportController : ControllerBase
     [HttpGet("status/{importId}")]
     public async Task<IActionResult> GetEstadoImportacion(Guid importId)
     {
+        
         var importacion = await _dbContext.ImportacionesDatos
             .Where(i => i.Id == importId)
             .Select(i => new
@@ -475,8 +478,10 @@ public class ImportController : ControllerBase
     /// Lista historial de importaciones de una empresa
     /// </summary>
     [HttpGet("history")]
-    public async Task<IActionResult> GetHistorialImportaciones([FromQuery] Guid empresaId, [FromQuery] int pagina = 1, [FromQuery] int tamano = 20)
+    public async Task<IActionResult> GetHistorialImportaciones( [FromQuery] int pagina = 1, [FromQuery] int tamano = 20)
     {
+        Guid empresaId = Guid.Parse("38950573-d769-49e3-a3f8-71bc6362508a");
+
         var importaciones = await _dbContext.ImportacionesDatos
             .Where(i => i.EmpresaId == empresaId)
             .OrderByDescending(i => i.FechaImportacion)

@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+锘縰sing System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Analitik_MVC.Data;
@@ -9,8 +9,8 @@ using Analitik_MVC.Models;
 namespace Analitik_MVC.Services.Database;
 
 /// <summary>
-/// Servicio para registro de logs de importaci髇
-/// Mantiene historial completo de cargas para auditor韆
+/// Servicio para registro de logs de importaci贸n
+/// Mantiene historial completo de cargas para auditor铆a
 /// </summary>
 public class ImportLogService
 {
@@ -26,15 +26,15 @@ public class ImportLogService
     }
 
     /// <summary>
-    /// Registra una importaci髇 en la base de datos
+    /// Registra una importaci贸n en la base de datos
     /// </summary>
     public async Task<Guid> RegistrarImportacionAsync(
         Guid empresaId,
         string nombreArchivo,
         long tamanoArchivo,
-        Stream archivoStream)
+        Stream archivoStream, DateTime? utcNow)
     {
-        var importacion = new ImportacionDatos
+        var importacion = new ImportacionesDatosLogs
         {
             Id = Guid.NewGuid(),
             EmpresaId = empresaId,
@@ -45,10 +45,10 @@ public class ImportLogService
             Estado = "en_proceso",
             FaseActual = "extraccion",
             ProgresoPorcentaje = 0,
-            FechaImportacion = DateTime.UtcNow,
-            FechaInicioEtl = DateTime.UtcNow,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            FechaImportacion = (DateTime)utcNow,
+            FechaInicioEtl = utcNow,
+            CreatedAt = (DateTime)utcNow,
+            UpdatedAt = (DateTime)utcNow
         };
 
         await _dbContext.ImportacionesDatosLogs.AddAsync(importacion);
@@ -58,7 +58,7 @@ public class ImportLogService
     }
 
     /// <summary>
-    /// Actualiza el estado de una importaci髇
+    /// Actualiza el estado de una importaci贸n
     /// </summary>
     public async Task ActualizarEstadoImportacionAsync(
         Guid importacionId,
@@ -70,7 +70,7 @@ public class ImportLogService
         var importacion = await _dbContext.ImportacionesDatosLogs.FindAsync(importacionId);
         if (importacion == null)
         {
-            _logger.LogWarning("Importaci髇 {Id} no encontrada", importacionId);
+            _logger.LogWarning("Importaci贸n {Id} no encontrada", importacionId);
             return;
         }
 
@@ -91,7 +91,7 @@ public class ImportLogService
     }
 
     /// <summary>
-    /// Registra la finalizaci髇 exitosa de una importaci髇
+    /// Registra la finalizaci贸n exitosa de una importaci贸n
     /// </summary>
     public async Task RegistrarCargaExitosaAsync(
         Guid importacionId,
@@ -133,14 +133,14 @@ public class ImportLogService
         await _dbContext.SaveChangesAsync();
 
         _logger.LogInformation(
-            "Importaci髇 {Id} completada: {Registros} registros en {Duracion}s",
+            "Importaci贸n {Id} completada: {Registros} registros en {Duracion}s",
             importacionId,
             resumen.RegistrosProcesados,
             resumen.DuracionSegundos);
     }
 
     /// <summary>
-    /// Registra una importaci髇 fallida con errores
+    /// Registra una importaci贸n fallida con errores
     /// </summary>
     public async Task RegistrarCargaFallidaAsync(
         Guid importacionId,
@@ -151,10 +151,25 @@ public class ImportLogService
         var importacion = await _dbContext.ImportacionesDatosLogs.FindAsync(importacionId);
         if (importacion == null) return;
 
+  
+
         importacion.Estado = "fallido";
         importacion.FaseActual = faseError;
         importacion.FechaFinEtl = DateTime.UtcNow;
-        importacion.DuracionSegundos = (int)(DateTime.UtcNow - importacion.FechaInicioEtl!.Value).TotalSeconds;
+
+        // 馃敟 ESTE ERA EL PROBLEMA
+        if (importacion.FechaInicioEtl.HasValue)
+        {
+            importacion.FechaInicioEtl = importacion.FechaInicioEtl.Value.ToUniversalTime();
+        }
+
+        importacion.DuracionSegundos =
+            (int)(DateTime.UtcNow - importacion.FechaInicioEtl.Value).TotalSeconds;
+
+        importacion.UpdatedAt = DateTime.UtcNow;
+
+  
+
 
         // Clasificar errores por fase
         var erroresJson = JsonSerializer.Serialize(errores, new JsonSerializerOptions { WriteIndented = true });
@@ -185,17 +200,36 @@ public class ImportLogService
         importacion.UpdatedAt = DateTime.UtcNow;
 
         _dbContext.ImportacionesDatosLogs.Update(importacion);
+
+        foreach (var entry in _dbContext.ChangeTracker.Entries())
+        {
+            foreach (var prop in entry.Properties)
+            {
+                if (prop.CurrentValue is DateTime dt)
+                {
+                    Console.WriteLine(
+                        $"{entry.Entity.GetType().Name}.{prop.Metadata.Name} = {dt.Kind}");
+                }
+                else if (prop.CurrentValue is DateTime nullableDt && nullableDt != default)
+                {
+                    Console.WriteLine(
+                        $"{entry.Entity.GetType().Name}.{prop.Metadata.Name} = {nullableDt.Kind}");
+                }
+            }
+        }
+
+
         await _dbContext.SaveChangesAsync();
 
         _logger.LogError(
-            "Importaci髇 {Id} fallida en fase {Fase}: {Errores} errores",
+            "Importaci贸n {Id} fallida en fase {Fase}: {Errores} errores",
             importacionId,
             faseError,
             errores.Count);
     }
 
     /// <summary>
-    /// Genera reporte detallado de una importaci髇
+    /// Genera reporte detallado de una importaci贸n
     /// </summary>
     public async Task<ImportReportDTO?> GenerarReporteAsync(Guid importacionId)
     {
@@ -255,7 +289,7 @@ public class ImportLogService
     }
 
     /// <summary>
-    /// Calcula hash SHA-256 del archivo para detecci髇 de duplicados
+    /// Calcula hash SHA-256 del archivo para detecci贸n de duplicados
     /// </summary>
     private async Task<string> CalcularHashArchivoAsync(Stream archivoStream)
     {
@@ -265,5 +299,10 @@ public class ImportLogService
         archivoStream.Position = 0;
         
         return Convert.ToHexString(hashBytes);
+    }
+
+    internal async Task<Guid?> RegistrarImportacionAsync(Guid empresaId, string fileName, long length, Stream archivoStream, DateTimeOffset utcNow)
+    {
+        throw new NotImplementedException();
     }
 }

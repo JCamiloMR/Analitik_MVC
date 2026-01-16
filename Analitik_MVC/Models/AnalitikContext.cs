@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Analitik_MVC.Models;
 
@@ -474,7 +475,22 @@ public partial class AnalitikContext : DbContext
                 .HasForeignKey(d => d.EmpresaId)
                 .HasConstraintName("suscripciones_empresa_id_fkey");
         });
-
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.GetProperties())
+            {
+                if (property.ClrType == typeof(DateTime) ||
+                    property.ClrType == typeof(DateTime?))
+                {
+                    property.SetValueConverter(new ValueConverter<DateTime, DateTime>(
+                        v => v.Kind == DateTimeKind.Utc
+                            ? v
+                            : DateTime.SpecifyKind(v, DateTimeKind.Utc),
+                        v => DateTime.SpecifyKind(v, DateTimeKind.Utc)
+                    ));
+                }
+            }
+        }
         OnModelCreatingPartial(modelBuilder);
     }
 

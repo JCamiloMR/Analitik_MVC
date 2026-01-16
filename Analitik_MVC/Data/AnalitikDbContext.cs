@@ -49,7 +49,7 @@ public partial class AnalitikDbContext : DbContext
 
     public virtual DbSet<ImportacionesDato> ImportacionesDatos { get; set; }
 
-    public virtual DbSet<ImportacionDatos> ImportacionesDatosLogs { get; set; }
+    public virtual DbSet<ImportacionesDatosLogs> ImportacionesDatosLogs { get; set; }
 
     public virtual DbSet<Inventario> Inventarios { get; set; }
 
@@ -73,7 +73,7 @@ public partial class AnalitikDbContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseNpgsql("Host=localhost;Port=5432;Database=Analitik;Username=postgres;Password=Camilo1307");
+        => optionsBuilder.UseNpgsql("Host=localhost;Port=5432;Database=Analitik;Username=postgres;Password=Camilo1307;Include Error Detail=true");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -1146,11 +1146,11 @@ public partial class AnalitikDbContext : DbContext
             entity.Property(e => e.FaseActual)
                 .HasConversion<string>()
                 .HasColumnName("fase_actual");
-            entity.Property(e => e.FechaFinEtl).HasColumnName("fecha_fin_etl");
+            entity.Property(e => e.FechaFinEtl).HasColumnName("fecha_fin_etl").HasColumnType("timestamp with time zone"); ;
             entity.Property(e => e.FechaImportacion)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnName("fecha_importacion");
-            entity.Property(e => e.FechaInicioEtl).HasColumnName("fecha_inicio_etl");
+            entity.Property(e => e.FechaInicioEtl).HasColumnName("fecha_inicio_etl").HasColumnType("timestamp with time zone"); ;
             entity.Property(e => e.FuenteDatosId).HasColumnName("fuente_datos_id");
             entity.Property(e => e.HashArchivo)
                 .HasMaxLength(64)
@@ -1208,7 +1208,7 @@ public partial class AnalitikDbContext : DbContext
         });
 
         // Nueva tabla para logs simplificados de import
-        modelBuilder.Entity<ImportacionDatos>(entity =>
+        modelBuilder.Entity<ImportacionesDatosLogs>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("importacion_datos_logs_pkey");
 

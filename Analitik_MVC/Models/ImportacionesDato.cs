@@ -50,11 +50,11 @@ public partial class ImportacionesDato
 
     public string? ResultadoCarga { get; set; }
 
-    public DateTime FechaImportacion { get; set; }
+    public DateTimeOffset FechaImportacion { get; set; }
 
-    public DateTime? FechaInicioEtl { get; set; }
+    public DateTimeOffset? FechaInicioEtl { get; set; }
 
-    public DateTime? FechaFinEtl { get; set; }
+    public DateTimeOffset? FechaFinEtl { get; set; }
 
     public int? DuracionSegundos { get; set; }
 
@@ -68,9 +68,9 @@ public partial class ImportacionesDato
 
     public string? LogEtl { get; set; }
 
-    public DateTime CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
 
-    public DateTime UpdatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
 
     public virtual ICollection<DatosCrudosTemporal> DatosCrudosTemporals { get; set; } = new List<DatosCrudosTemporal>();
 

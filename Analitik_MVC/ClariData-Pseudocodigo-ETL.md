@@ -1175,7 +1175,8 @@ LÓGICA:
          error: "Violación de integridad: " + error.Message
        }
 
-     EXCEPCIÓN error tipo DatabaseException
+     EXCEPCIÓN error tipo 
+     Exception
        transaccion.Rollback()
        RETORNAR {
          exitoso: false,

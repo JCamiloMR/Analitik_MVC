@@ -7,7 +7,7 @@ namespace Analitik_MVC.Models;
 /// Modelo para registro de importaciones de datos desde Excel
 /// </summary>
 [Table("importaciones_datos")]
-public class ImportacionDatos
+public class ImportacionesDatosLogs
 {
     [Key]
     [Column("id")]
@@ -90,13 +90,13 @@ public class ImportacionDatos
     // ===================================================================
 
     [Column("fecha_importacion")]
-    public DateTime FechaImportacion { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset FechaImportacion { get; set; } = DateTime.UtcNow;
 
     [Column("fecha_inicio_etl")]
-    public DateTime? FechaInicioEtl { get; set; }
+    public DateTimeOffset? FechaInicioEtl { get; set; }
 
     [Column("fecha_fin_etl")]
-    public DateTime? FechaFinEtl { get; set; }
+    public DateTimeOffset? FechaFinEtl { get; set; }
 
     [Column("duracion_segundos")]
     public int? DuracionSegundos { get; set; }
@@ -116,10 +116,10 @@ public class ImportacionDatos
     // ===================================================================
 
     [Column("created_at")]
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTime.UtcNow;
 
     [Column("updated_at")]
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // ===================================================================
     // NAVEGACIÓN
@@ -127,4 +127,6 @@ public class ImportacionDatos
 
     [ForeignKey(nameof(EmpresaId))]
     public virtual Empresa? Empresa { get; set; }
+
+ 
 }

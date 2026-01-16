@@ -414,7 +414,8 @@ public class ExcelReaderService
     /// Lee y mapea hoja INVENTARIO
     /// </summary>
     public (List<InventarioDTO> Inventarios, ValidationResult Validacion) LeerYMapearInventario(
-        IXLWorksheet hoja, List<ProductoDTO> productosValidos, Guid empresaId)
+        IXLWorksheet hoja, List<ProductoDTO> 
+        productosValidos, Guid empresaId)
     {
         var inventarios = new List<InventarioDTO>();
         var errores = new List<ErrorValidacion>();
