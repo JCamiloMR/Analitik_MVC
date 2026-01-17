@@ -35,6 +35,8 @@ public class ImportLogService
         Stream archivoStream, 
         DateTime? utcNow)
     {
+        var nowUtc = utcNow ?? DateTime.UtcNow;
+
         var importacion = new ImportacionesDatosLogs
         {
             Id = Guid.NewGuid(),
@@ -46,11 +48,13 @@ public class ImportLogService
             Estado = "en_proceso",
             FaseActual = "extraccion",
             ProgresoPorcentaje = 0,
-            FechaImportacion = DateTimeOffset.FromFileTime(utcNow?.ToFileTime() ?? DateTime.UtcNow.ToFileTime()),
-            FechaInicioEtl = DateTimeOffset.FromFileTime(utcNow?.ToFileTime() ?? DateTime.UtcNow.ToFileTime()),
-            CreatedAt = DateTimeOffset.FromFileTime(utcNow?.ToFileTime() ?? DateTime.UtcNow.ToFileTime()),
-            UpdatedAt = DateTimeOffset.FromFileTime(utcNow?.ToFileTime() ?? DateTime.UtcNow.ToFileTime())
+
+            FechaImportacion = DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc),
+            FechaInicioEtl = DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc),
+            CreatedAt = DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc),
+            UpdatedAt = DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc)
         };
+
 
         await _dbContext.ImportacionesDatosLogs.AddAsync(importacion);
         await _dbContext.SaveChangesAsync();
@@ -85,7 +89,7 @@ public class ImportLogService
             importacion.ErroresCarga = errores;
         }
 
-        importacion.UpdatedAt = DateTimeOffset.UtcNow;
+        importacion.UpdatedAt = DateTime.UtcNow;
 
         _dbContext.ImportacionesDatosLogs.Update(importacion);
         await _dbContext.SaveChangesAsync();
@@ -105,7 +109,7 @@ public class ImportLogService
         importacion.Estado = "completado";
         importacion.FaseActual = "completado";
         importacion.ProgresoPorcentaje = 100;
-        importacion.FechaFinEtl = DateTimeOffset.UtcNow;
+        importacion.FechaFinEtl = DateTime.UtcNow;
         importacion.DuracionSegundos = (int)resumen.DuracionSegundos;
 
         importacion.RegistrosExtraidos = resumen.RegistrosProcesados;
@@ -128,7 +132,7 @@ public class ImportLogService
             importacion.Advertencias = JsonSerializer.Serialize(advertencias);
         }
 
-        importacion.UpdatedAt = DateTimeOffset.UtcNow;
+        importacion.UpdatedAt = DateTime.UtcNow;
 
         _dbContext.ImportacionesDatosLogs.Update(importacion);
         await _dbContext.SaveChangesAsync();
@@ -154,15 +158,15 @@ public class ImportLogService
 
         importacion.Estado = "fallido";
         importacion.FaseActual = faseError;
-        importacion.FechaFinEtl = DateTimeOffset.UtcNow;
+        importacion.FechaFinEtl = DateTime.UtcNow;
 
-        // Calcular duración usando DateTimeOffset
+        // Calcular duración usando DateTime
         if (importacion.FechaInicioEtl.HasValue)
         {
-            importacion.DuracionSegundos = (int)(DateTimeOffset.UtcNow - importacion.FechaInicioEtl.Value).TotalSeconds;
+            importacion.DuracionSegundos = (int)(DateTime.UtcNow - importacion.FechaInicioEtl.Value).TotalSeconds;
         }
 
-        importacion.UpdatedAt = DateTimeOffset.UtcNow;
+        importacion.UpdatedAt = DateTime.UtcNow;
 
         // Clasificar errores por fase
         var erroresJson = JsonSerializer.Serialize(errores, new JsonSerializerOptions { WriteIndented = true });
@@ -190,10 +194,38 @@ public class ImportLogService
         }, new JsonSerializerOptions { WriteIndented = true });
 
         importacion.ResultadoCarga = resultadoCarga;
-        importacion.UpdatedAt = DateTimeOffset.UtcNow;
+        importacion.FechaFinEtl = DateTime.UtcNow;
+
+        if (importacion.FechaInicioEtl.HasValue)
+        {
+            importacion.FechaInicioEtl =
+                DateTime.SpecifyKind(importacion.FechaInicioEtl.Value, DateTimeKind.Utc);
+
+            importacion.DuracionSegundos =
+                (int)(DateTime.UtcNow - importacion.FechaInicioEtl.Value).TotalSeconds;
+        }
+
+        importacion.UpdatedAt = DateTime.UtcNow;
 
         _dbContext.ImportacionesDatosLogs.Update(importacion);
+
+        var entry = _dbContext.Entry(importacion);
+
+        foreach (var prop in entry.Properties)
+        {
+            if (prop.Metadata.ClrType == typeof(DateTime) && prop.CurrentValue is DateTime dt)
+            {
+                _logger.LogError(
+                    "Fecha PROBLEMA: {Prop} = {Value} | Kind = {Kind}",
+                    prop.Metadata.Name,
+                    dt,
+                    dt.Kind
+                );
+            }
+        }
+
         await _dbContext.SaveChangesAsync();
+
 
         _logger.LogError(
             "Importación {Id} fallida en fase {Fase}: {Errores} errores",

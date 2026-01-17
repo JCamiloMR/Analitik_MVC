@@ -90,13 +90,13 @@ public class ImportacionesDatosLogs
     // ===================================================================
 
     [Column("fecha_importacion")]
-    public DateTimeOffset FechaImportacion { get; set; } = DateTime.UtcNow;
+    public DateTime FechaImportacion { get; set; } = DateTime.UtcNow;
 
     [Column("fecha_inicio_etl")]
-    public DateTimeOffset? FechaInicioEtl { get; set; }
+    public DateTime? FechaInicioEtl { get; set; }
 
     [Column("fecha_fin_etl")]
-    public DateTimeOffset? FechaFinEtl { get; set; }
+    public DateTime? FechaFinEtl { get; set; }
 
     [Column("duracion_segundos")]
     public int? DuracionSegundos { get; set; }
@@ -116,10 +116,10 @@ public class ImportacionesDatosLogs
     // ===================================================================
 
     [Column("created_at")]
-    public DateTimeOffset CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     [Column("updated_at")]
-    public DateTimeOffset UpdatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // ===================================================================
     // NAVEGACIÓN

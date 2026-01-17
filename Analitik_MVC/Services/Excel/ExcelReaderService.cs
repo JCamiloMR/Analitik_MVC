@@ -507,7 +507,11 @@ public class ExcelReaderService
                     CantidadEnTransito = idxTransito.HasValue ? ParseIntSafe(fila.Cell(idxTransito.Value).Value) : null,
                     StockMinimo = idxStockMin.HasValue ? ParseIntSafe(fila.Cell(idxStockMin.Value).Value) : null,
                     StockMaximo = idxStockMax.HasValue ? ParseIntSafe(fila.Cell(idxStockMax.Value).Value) : null,
-                    FechaVencimiento = idxFechaVto.HasValue ? ParseDateSafe(fila.Cell(idxFechaVto.Value).Value) : null,
+                    FechaVencimiento = idxFechaVto.HasValue
+                                        ? DateTime.SpecifyKind(
+                                            ParseDateSafe(fila.Cell(idxFechaVto.Value).Value).Value,
+                                            DateTimeKind.Utc)
+                                        : null,
                     Ubicacion = idxUbicacion.HasValue ? fila.Cell(idxUbicacion.Value).GetString()?.Trim() : null,
                     EmpresaId = empresaId,
                     FilaOrigen = numeroFila
@@ -640,8 +644,10 @@ public class ExcelReaderService
                     numeroFila++;
                     continue;
                 }
+                
 
-                if (fechaVenta.Value > DateTime.Now)
+
+                if (fechaVenta.Value > DateTime.UtcNow)
                 {
                     errores.Add(new ErrorValidacion
                     {
@@ -668,11 +674,15 @@ public class ExcelReaderService
                 }
 
                 var montoTotal = _transformationService.ParseCurrency(totalRaw);
+                var fechaVentaUtc = DateTime.SpecifyKind(
+                    fechaVenta.Value,
+                    DateTimeKind.Utc
+                );
 
                 var venta = new VentaDTO
                 {
                     NumeroOrden = numeroOrden,
-                    FechaVenta = fechaVenta.Value,
+                    FechaVenta = fechaVentaUtc,
                     ClienteNombre = _transformationService.NormalizeText(cliente),
                     MontoTotal = montoTotal,
                     MetodoPago = metodoPago,

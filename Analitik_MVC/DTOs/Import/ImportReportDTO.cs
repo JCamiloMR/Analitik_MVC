@@ -9,7 +9,7 @@ namespace Analitik_MVC.DTOs.Import;
 public class ImportReportDTO
 {
     public Guid ImportId { get; set; }
-    public DateTimeOffset FechaCarga { get; set; }
+    public DateTime FechaCarga { get; set; }
     public Guid EmpresaId { get; set; }
     public string Estado { get; set; } = null!;
     public string NombreArchivo { get; set; } = null!;

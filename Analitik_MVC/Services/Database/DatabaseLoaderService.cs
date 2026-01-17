@@ -1,4 +1,4 @@
-using System.Data;
+ï»¿using System.Data;
 using Analitik_MVC.Data;
 using Analitik_MVC.DTOs.Import;
 using Analitik_MVC.Models;
@@ -8,8 +8,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Analitik_MVC.Services.Database;
 
 /// <summary>
-/// Servicio para carga atómica de datos en base de datos
-/// Implementa transacción SERIALIZABLE (todo o nada)
+/// Servicio para carga atÃ³mica de datos en base de datos
+/// Implementa transacciÃ³n SERIALIZABLE (todo o nada)
 /// </summary>
 public class DatabaseLoaderService
 {
@@ -25,7 +25,7 @@ public class DatabaseLoaderService
     }
 
     /// <summary>
-    /// Carga datos atómicamente en BD con transacción SERIALIZABLE
+    /// Carga datos atÃ³micamente en BD con transacciÃ³n SERIALIZABLE
     /// </summary>
     public async Task<ResumenImportacion> CargarDatosAtomicamente(
         List<ProductoDTO> productos,
@@ -37,7 +37,7 @@ public class DatabaseLoaderService
         var inicio = DateTime.UtcNow;
         var resumen = new ResumenImportacion();
 
-        // Iniciar transacción SERIALIZABLE
+        // Iniciar transacciÃ³n SERIALIZABLE
         using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
 
         try
@@ -88,14 +88,14 @@ public class DatabaseLoaderService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error en carga atómica, ejecutando ROLLBACK");
+            _logger.LogError(ex, "Error en carga atÃ³mica, ejecutando ROLLBACK");
             await transaction.RollbackAsync();
             throw;
         }
     }
 
     /// <summary>
-    /// Carga productos con lógica Upsert (insert o update)
+    /// Carga productos con lÃ³gica Upsert (insert o update)
     /// </summary>
     private async Task<(int insertados, int actualizados)> CargarProductos(
         List<ProductoDTO> productosDTO, 
@@ -184,7 +184,7 @@ public class DatabaseLoaderService
     {
         int insertados = 0;
 
-        // Mapear códigos a IDs de productos
+        // Mapear cÃ³digos a IDs de productos
         var codigosEnCarga = inventariosDTO.Select(i => i.CodigoProducto).Distinct().ToList();
         var productosMap = await _dbContext.Productos
             .Where(p => p.EmpresaId == empresaId && codigosEnCarga.Contains(p.CodigoProducto))
@@ -270,48 +270,90 @@ public class DatabaseLoaderService
 
         foreach (var dto in ventasDTO)
         {
-            // Verificar si ya existe
+            // 1. Verificar si ya existe la venta
             var existente = await _dbContext.Ventas
-                .FirstOrDefaultAsync(v => v.NumeroOrden == dto.NumeroOrden && v.EmpresaId == empresaId);
+                .AsNoTracking()
+                .FirstOrDefaultAsync(v =>
+                    v.NumeroOrden == dto.NumeroOrden &&
+                    v.EmpresaId == empresaId);
 
             if (existente != null)
             {
-                _logger.LogWarning("Venta {NumeroOrden} ya existe, saltando...", dto.NumeroOrden);
+                _logger.LogWarning(
+                    "Venta {NumeroOrden} ya existe para empresa {EmpresaId}, saltando...",
+                    dto.NumeroOrden,
+                    empresaId);
+
                 continue;
             }
 
+            // 2. Normalizar montos (CLAVE para el CHECK total_coherente)
+            var subtotal = dto.MontoSubtotal;
+            var descuento = dto.MontoDescuento ?? 0;
+            var impuestos = dto.MontoImpuestos ?? 0;
+
+            if (subtotal < 0 || descuento < 0 || impuestos < 0)
+            {
+                _logger.LogWarning(
+                    "Montos invÃ¡lidos en orden {NumeroOrden}. Subtotal: {Subtotal}, Desc: {Desc}, Imp: {Imp}",
+                    dto.NumeroOrden,
+                    subtotal,
+                    descuento,
+                    impuestos);
+
+                continue;
+            }
+
+            var totalCalculado = subtotal - descuento + impuestos;
+
+            // 3. Normalizar fecha (PostgreSQL TIMESTAMPTZ â†’ SIEMPRE UTC)
+            var fechaVentaUtc =
+                dto.FechaVenta.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(dto.FechaVenta, DateTimeKind.Utc)
+                    : dto.FechaVenta.ToUniversalTime();
+
+            // 4. Crear entidad FINAL (coherente con DB)
             var nuevaVenta = new Venta
             {
                 Id = Guid.NewGuid(),
                 EmpresaId = empresaId,
+
                 NumeroOrden = dto.NumeroOrden,
                 NumeroFactura = dto.NumeroFactura,
-                FechaVenta = dto.FechaVenta,
+
+                FechaVenta = fechaVentaUtc,
+
                 ClienteNombre = dto.ClienteNombre,
                 ClienteDocumento = dto.ClienteDocumento,
                 ClienteTelefono = dto.ClienteTelefono,
                 ClienteEmail = dto.ClienteEmail,
                 ClienteDireccion = dto.ClienteDireccion,
-                MontoSubtotal = dto.MontoSubtotal,
-                MontoDescuento = dto.MontoDescuento ?? 0,
-                MontoImpuestos = dto.MontoImpuestos ?? 0,
-                MontoTotal = dto.MontoTotal,
+
+                MontoSubtotal = subtotal,
+                MontoDescuento = descuento,
+                MontoImpuestos = impuestos,
+                MontoTotal = totalCalculado,
+
                 MetodoPago = Enum.Parse<MetodoPago>(dto.MetodoPago, true),
                 EstadoPago = dto.EstadoPago ?? "pendiente",
+                Estado = Enum.Parse<EstadoVenta>(dto.Estado ?? "completado", true),
+
                 Vendedor = dto.Vendedor,
                 CanalVenta = dto.CanalVenta,
-                Estado = Enum.Parse<EstadoVenta>(dto.Estado ?? "completado", true),
                 Notas = dto.Notas,
+
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
 
+            // 5. Insertar
             await _dbContext.Ventas.AddAsync(nuevaVenta);
             insertados++;
         }
 
         return insertados;
     }
+
 
     /// <summary>
     /// Carga datos financieros
