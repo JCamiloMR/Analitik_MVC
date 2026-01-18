@@ -468,10 +468,44 @@ public class ImportController : ControllerBase
         
         if (reporte == null)
         {
-            return NotFound(new { mensaje = "Reporte no encontrado" });
+            return NotFound(new { 
+                mensaje = "Reporte no encontrado",
+                importId = importId 
+            });
         }
 
-        return Ok(reporte);
+        // Estructurar respuesta de forma amigable para el frontend
+        var respuestaEstructurada = new
+        {
+            // Metadata general
+            importId = reporte.ImportId,
+            nombreArchivo = reporte.NombreArchivo,
+            fechaCarga = reporte.FechaCarga,
+            empresaId = reporte.EmpresaId,
+            estado = reporte.Estado,
+            
+            // Resumen ejecutivo
+            resumen = reporte.Resumen != null ? new
+            {
+                registrosProcesados = reporte.Resumen.RegistrosProcesados,
+                productosInsertados = reporte.Resumen.ProductosInsertados,
+                productosActualizados = reporte.Resumen.ProductosActualizados,
+                inventariosInsertados = reporte.Resumen.InventariosInsertados,
+                ventasInsertadas = reporte.Resumen.VentasInsertadas,
+                financierosInsertados = reporte.Resumen.FinancierosInsertados,
+                duracionSegundos = reporte.Resumen.DuracionSegundos,
+                totalErrores = reporte.Resumen.TotalErrores,
+                totalAdvertencias = reporte.Resumen.TotalAdvertencias
+            } : null,
+            
+            // Errores por hoja (agrupados)
+            erroresPorHoja = reporte.ErroresPorHoja,
+            
+            // Resultado detallado (opcional)
+            resultadoDetallado = reporte.ResultadoDetallado
+        };
+
+        return Ok(respuestaEstructurada);
     }
 
     /// <summary>
