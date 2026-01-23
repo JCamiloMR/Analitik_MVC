@@ -459,53 +459,108 @@ public class ImportController : ControllerBase
 
     /// <summary>
     /// GET /api/import/report/{importId}
-    /// Descarga reporte detallado de una importación
+    /// Retorna los DATOS IMPORTADOS en formato tabular para visualización tipo Excel
     /// </summary>
     [HttpGet("report/{importId}")]
     public async Task<IActionResult> GetReporteImportacion(Guid importId)
     {
-        var reporte = await _importLogService.GenerarReporteAsync(importId);
-        
-        if (reporte == null)
+        var importacion = await _dbContext.ImportacionesDatos
+            .Where(i => i.Id == importId)
+            .Select(i => new
+            {
+                i.Id,
+                i.NombreArchivo,
+                i.FechaImportacion,
+                i.Estado,
+                i.EmpresaId,
+                i.RegistrosCargados,
+                i.TipoDatos
+            })
+            .FirstOrDefaultAsync();
+
+        if (importacion == null)
         {
-            return NotFound(new { 
-                mensaje = "Reporte no encontrado",
-                importId = importId 
-            });
+            return NotFound(new { mensaje = "Importación no encontrada" });
         }
 
-        // Estructurar respuesta de forma amigable para el frontend
-        var respuestaEstructurada = new
+        // Obtener datos importados por tipo
+        var datosImportados = new
         {
-            // Metadata general
-            importId = reporte.ImportId,
-            nombreArchivo = reporte.NombreArchivo,
-            fechaCarga = reporte.FechaCarga,
-            empresaId = reporte.EmpresaId,
-            estado = reporte.Estado,
-            
-            // Resumen ejecutivo
-            resumen = reporte.Resumen != null ? new
+            metadata = new
             {
-                registrosProcesados = reporte.Resumen.RegistrosProcesados,
-                productosInsertados = reporte.Resumen.ProductosInsertados,
-                productosActualizados = reporte.Resumen.ProductosActualizados,
-                inventariosInsertados = reporte.Resumen.InventariosInsertados,
-                ventasInsertadas = reporte.Resumen.VentasInsertadas,
-                financierosInsertados = reporte.Resumen.FinancierosInsertados,
-                duracionSegundos = reporte.Resumen.DuracionSegundos,
-                totalErrores = reporte.Resumen.TotalErrores,
-                totalAdvertencias = reporte.Resumen.TotalAdvertencias
-            } : null,
-            
-            // Errores por hoja (agrupados)
-            erroresPorHoja = reporte.ErroresPorHoja,
-            
-            // Resultado detallado (opcional)
-            resultadoDetallado = reporte.ResultadoDetallado
+                importId = importacion.Id,
+                nombreArchivo = importacion.NombreArchivo,
+                fechaImportacion = importacion.FechaImportacion,
+                estado = importacion.Estado,
+                registrosCargados = importacion.RegistrosCargados
+            },
+            productos = await _dbContext.Productos
+                .Where(p => p.EmpresaId == importacion.EmpresaId)
+                .OrderByDescending(p => p.CreatedAt)
+                .Take(100) // Limitar para performance
+                .Select(p => new
+                {
+                    p.CodigoProducto,
+                    p.Nombre,
+                    p.Categoria,
+                    p.Marca,
+                    p.PrecioVenta,
+                    p.CostoUnitario,
+                    p.UnidadMedida,
+                    p.Activo,
+                    p.RequiereInventario
+                })
+                .ToListAsync(),
+            inventario = await _dbContext.Inventarios
+                .Where(i => i.Producto.EmpresaId == importacion.EmpresaId)
+                .OrderByDescending(i => i.CreatedAt)
+                .Take(100)
+                .Select(i => new
+                {
+                    CodigoProducto = i.Producto.CodigoProducto,
+                    NombreProducto = i.Producto.Nombre,
+                    i.CantidadDisponible,
+                    i.CantidadReservada,
+                    i.StockMinimo,
+                    i.StockMaximo,
+                    i.Ubicacion,
+                    EstadoStock = i.EstadoStock.ToString()
+                })
+                .ToListAsync(),
+            ventas = await _dbContext.Ventas
+                .Where(v => v.EmpresaId == importacion.EmpresaId)
+                .OrderByDescending(v => v.FechaVenta)
+                .Take(100)
+                .Select(v => new
+                {
+                    v.NumeroOrden,
+                    v.FechaVenta,
+                    v.ClienteNombre,
+                    v.MontoSubtotal,
+                    v.MontoDescuento,
+                    v.MontoImpuestos,
+                    v.MontoTotal,
+                    MetodoPago = v.MetodoPago.ToString(),
+                    Estado = v.Estado.ToString()
+                })
+                .ToListAsync(),
+            financieros = await _dbContext.DatosFinancieros
+                .Where(f => f.EmpresaId == importacion.EmpresaId)
+                .OrderByDescending(f => f.FechaRegistro)
+                .Take(100)
+                .Select(f => new
+                {
+                    TipoDato = f.TipoDato.ToString(),
+                    f.Categoria,
+                    f.Concepto,
+                    f.Monto,
+                    f.FechaRegistro,
+                    f.Beneficiario
+                })
+                .ToListAsync()
         };
 
-        return Ok(respuestaEstructurada);
+        return Ok(datosImportados);
     }
 
     /// <summary>

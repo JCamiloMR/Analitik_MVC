@@ -50,16 +50,55 @@ interface RecentImport {
   duracionSegundos?: number;
 }
 
-// Interfaz para el reporte detallado
-interface ReporteDetallado {
-  importId: string;
-  nombreArchivo: string;
-  fechaCarga: string;
-  empresaId: string;
-  estado: string;
-  resumen: ImportResumen | null;
-  erroresPorHoja: Record<string, ErrorValidacion[]>;
-  resultadoDetallado?: string;
+// Interfaz para los datos importados (vista tabular)
+interface DatosImportados {
+  metadata: {
+    importId: string;
+    nombreArchivo: string;
+    fechaImportacion: string;
+    estado: string;
+    registrosCargados: number;
+  };
+  productos: Array<{
+    codigoProducto: string;
+    nombre: string;
+    categoria: string | null;
+    marca: string | null;
+    precioVenta: number;
+    costoUnitario: number | null;
+    unidadMedida: string;
+    activo: boolean;
+    requiereInventario: boolean;
+  }>;
+  inventario: Array<{
+    codigoProducto: string;
+    nombreProducto: string;
+    cantidadDisponible: number;
+    cantidadReservada: number | null;
+    stockMinimo: number | null;
+    stockMaximo: number | null;
+    ubicacion: string | null;
+    estadoStock: string;
+  }>;
+  ventas: Array<{
+    numeroOrden: string;
+    fechaVenta: string;
+    clienteNombre: string;
+    montoSubtotal: number;
+    montoDescuento: number | null;
+    montoImpuestos: number | null;
+    montoTotal: number;
+    metodoPago: string;
+    estado: string;
+  }>;
+  financieros: Array<{
+    tipoDato: string;
+    categoria: string;
+    concepto: string;
+    monto: number;
+    fechaRegistro: string;
+    beneficiario: string | null;
+  }>;
 }
 
 // ===================================================================
@@ -80,10 +119,11 @@ export function DataLoadingPanel() {
   const [loadingImports, setLoadingImports] = useState(true);
   const [recentImports, setRecentImports] = useState<RecentImport[]>([]);
 
-  // Modal de reporte detallado
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [reporteDetallado, setReporteDetallado] = useState<ReporteDetallado | null>(null);
-  const [loadingReporte, setLoadingReporte] = useState(false);
+  // Modal de datos importados (vista tabular)
+  const [showDataModal, setShowDataModal] = useState(false);
+  const [datosImportados, setDatosImportados] = useState<DatosImportados | null>(null);
+  const [loadingDatos, setLoadingDatos] = useState(false);
+  const [tablaActiva, setTablaActiva] = useState<'productos' | 'inventario' | 'ventas' | 'financieros'>('productos');
 
   // Drag & drop state
   const [dragActive, setDragActive] = useState(false);
@@ -354,11 +394,12 @@ export function DataLoadingPanel() {
   };
 
   /**
-   * Cargar reporte detallado
+   * Cargar datos importados (vista tabular tipo Excel)
    */
-  const handleVerReporteDetallado = async (importId: string) => {
-    setLoadingReporte(true);
-    setShowReportModal(true);
+  const handleVerDatosImportados = async (importId: string) => {
+    setLoadingDatos(true);
+    setShowDataModal(true);
+    setTablaActiva('productos'); // Resetear pestaña activa
     
     try {
       const response = await fetch(`/api/import/report/${importId}`, {
@@ -369,17 +410,17 @@ export function DataLoadingPanel() {
       });
 
       if (response.ok) {
-        const data: ReporteDetallado = await response.json();
-        setReporteDetallado(data);
+        const data: DatosImportados = await response.json();
+        setDatosImportados(data);
       } else {
-        console.error('Error al cargar reporte:', response.statusText);
-        setReporteDetallado(null);
+        console.error('Error al cargar datos:', response.statusText);
+        setDatosImportados(null);
       }
     } catch (error) {
-      console.error('Error loading report:', error);
-      setReporteDetallado(null);
+      console.error('Error loading data:', error);
+      setDatosImportados(null);
     } finally {
-      setLoadingReporte(false);
+      setLoadingDatos(false);
     }
   };
 
@@ -429,16 +470,16 @@ export function DataLoadingPanel() {
 
   return (
     <div className="min-h-full bg-slate-50 dark:bg-[#111827] transition-colors duration-200">
-      {/* Modal de Reporte Detallado */}
-      {showReportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
+      {/* Modal de Datos Importados (Vista Tabular Tipo Excel) */}
+      {showDataModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-hidden">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-white dark:bg-[#1E293B] rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col"
+            className="bg-white dark:bg-[#1E293B] rounded-lg shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col"
           >
-            {/* Header del Modal */}
+            {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-[#374151]">
               <div className="flex items-center space-x-3">
                 <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
@@ -446,249 +487,278 @@ export function DataLoadingPanel() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900 dark:text-[#F1F5F9]">
-                    Reporte Detallado de Importación
+                    Datos Importados
                   </h2>
-                  {reporteDetallado && (
+                  {datosImportados && (
                     <p className="text-sm text-slate-600 dark:text-[#E5E7EB] mt-1">
-                      {reporteDetallado.nombreArchivo}
+                      {datosImportados.metadata.nombreArchivo} • {datosImportados.metadata.registrosCargados} registros
                     </p>
                   )}
                 </div>
               </div>
               <button
-                onClick={() => setShowReportModal(false)}
+                onClick={() => setShowDataModal(false)}
                 className="p-2 hover:bg-slate-100 dark:hover:bg-[#334155] rounded-lg transition-colors"
               >
                 <X className="w-6 h-6 text-slate-600 dark:text-[#E5E7EB]" />
               </button>
             </div>
 
-            {/* Body del Modal */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {loadingReporte ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            {/* Pestañas */}
+            <div className="flex space-x-1 p-4 border-b border-slate-200 dark:border-[#374151] bg-slate-50 dark:bg-[#273043]">
+              {['productos', 'inventario', 'ventas', 'financieros'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setTablaActiva(tab as any)}
+                  className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                    tablaActiva === tab
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white dark:bg-[#1E293B] text-slate-700 dark:text-[#E5E7EB] hover:bg-slate-100 dark:hover:bg-[#334155]'
+                  }`}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)} {datosImportados && `(${(datosImportados as any)[tab]?.length || 0})`}
+                </button>
+              ))}
+            </div>
+
+            {/* Body con Tabla */}
+            <div className="flex-1 overflow-auto p-6">
+              {loadingDatos ? (
+                <div className="flex flex-col items-center justify-center h-full space-y-4">
                   <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-slate-600 dark:text-[#E5E7EB]">Cargando reporte detallado...</p>
+                  <p className="text-slate-600 dark:text-[#E5E7EB]">Cargando datos importados...</p>
                 </div>
-              ) : reporteDetallado ? (
+              ) : datosImportados ? (
                 <>
-                  {/* Metadata Card */}
-                  <Card className="bg-slate-50 dark:bg-[#273043] border-slate-200 dark:border-[#374151]">
-                    <CardHeader>
-                      <CardTitle className="text-slate-900 dark:text-[#F1F5F9] flex items-center space-x-2">
-                        <Database className="w-5 h-5" />
-                        <span>Información General</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="flex items-start space-x-3">
-                        <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-                        <div>
-                          <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-medium">Fecha de Carga</p>
-                          <p className="text-sm text-slate-900 dark:text-[#F1F5F9] font-semibold">
-                            {new Date(reporteDetallado.fechaCarga).toLocaleString('es-CO')}
-                          </p>
+                  {/* Tabla de Productos */}
+                  {tablaActiva === 'productos' && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 dark:bg-[#273043] border-b-2 border-slate-300 dark:border-[#374151]">
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Código</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Nombre</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Categoría</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Marca</th>
+                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Precio Venta</th>
+                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Costo</th>
+                            <th className="text-center py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Unidad</th>
+                            <th className="text-center py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9]">Activo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {datosImportados.productos.map((producto, idx) => (
+                            <tr key={idx} className="border-b border-slate-200 dark:border-[#374151] hover:bg-slate-50 dark:hover:bg-[#334155]">
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] font-mono text-sm text-slate-900 dark:text-[#F1F5F9]">{producto.codigoProducto}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-900 dark:text-[#F1F5F9]">{producto.nombre}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-600 dark:text-[#E5E7EB]">{producto.categoria || '-'}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-600 dark:text-[#E5E7EB]">{producto.marca || '-'}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right font-semibold text-green-600 dark:text-green-400">
+                                ${producto.precioVenta.toLocaleString('es-CO')}
+                              </td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right text-slate-600 dark:text-[#E5E7EB]">
+                                ${producto.costoUnitario?.toLocaleString('es-CO') || '-'}
+                              </td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-center text-xs text-slate-600 dark:text-[#E5E7EB]">{producto.unidadMedida}</td>
+                              <td className="py-3 px-4 text-center">
+                                {producto.activo ? (
+                                  <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
+                                ) : (
+                                  <span className="inline-block w-2 h-2 bg-red-500 rounded-full"></span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {datosImportados.productos.length === 0 && (
+                        <div className="text-center py-12 text-slate-500 dark:text-[#E5E7EB]">
+                          <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                          <p>No hay productos en esta importación</p>
                         </div>
-                      </div>
-                      <div className="flex items-start space-x-3">
-                        <CheckCircle2 className={`w-5 h-5 mt-0.5 ${
-                          reporteDetallado.estado === 'completado' 
-                            ? 'text-green-600 dark:text-green-400' 
-                            : 'text-red-600 dark:text-red-400'
-                        }`} />
-                        <div>
-                          <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-medium">Estado</p>
-                          <Badge className={`${
-                            reporteDetallado.estado === 'completado'
-                              ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
-                              : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'
-                          }`}>
-                            {reporteDetallado.estado === 'completado' ? 'Exitoso' : 'Fallido'}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div className="flex items-start space-x-3">
-                        <FileSpreadsheet className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-                        <div>
-                          <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-medium">ID Importación</p>
-                          <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-mono">
-                            {reporteDetallado.importId.substring(0, 8)}...
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Resumen Ejecutivo */}
-                  {reporteDetallado.resumen && (
-                    <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
-                      <CardHeader>
-                        <CardTitle className="text-slate-900 dark:text-[#F1F5F9] flex items-center space-x-2">
-                          <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                          <span>Resumen Ejecutivo</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <div className="bg-white dark:bg-[#1E293B] p-4 rounded-lg border border-blue-200 dark:border-blue-800 shadow-sm">
-                            <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-medium mb-1">Registros Procesados</p>
-                            <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                              {reporteDetallado.resumen.registrosProcesados}
-                            </p>
-                          </div>
-                          <div className="bg-white dark:bg-[#1E293B] p-4 rounded-lg border border-green-200 dark:border-green-800 shadow-sm">
-                            <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-medium mb-1">Productos Nuevos</p>
-                            <p className="text-3xl font-bold text-green-600 dark:text-green-400">
-                              {reporteDetallado.resumen.productosInsertados}
-                            </p>
-                          </div>
-                          <div className="bg-white dark:bg-[#1E293B] p-4 rounded-lg border border-orange-200 dark:border-orange-800 shadow-sm">
-                            <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-medium mb-1">Productos Actualizados</p>
-                            <p className="text-3xl font-bold text-orange-600 dark:text-orange-400">
-                              {reporteDetallado.resumen.productosActualizados}
-                            </p>
-                          </div>
-                          <div className="bg-white dark:bg-[#1E293B] p-4 rounded-lg border border-purple-200 dark:border-purple-800 shadow-sm">
-                            <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-medium mb-1">Ventas Insertadas</p>
-                            <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
-                              {reporteDetallado.resumen.ventasInsertadas}
-                            </p>
-                          </div>
-                          <div className="bg-white dark:bg-[#1E293B] p-4 rounded-lg border border-cyan-200 dark:border-cyan-800 shadow-sm">
-                            <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-medium mb-1">Inventario</p>
-                            <p className="text-3xl font-bold text-cyan-600 dark:text-cyan-400">
-                              {reporteDetallado.resumen.inventariosInsertados}
-                            </p>
-                          </div>
-                          <div className="bg-white dark:bg-[#1E293B] p-4 rounded-lg border border-pink-200 dark:border-pink-800 shadow-sm">
-                            <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-medium mb-1">Datos Financieros</p>
-                            <p className="text-3xl font-bold text-pink-600 dark:text-pink-400">
-                              {reporteDetallado.resumen.financierosInsertados}
-                            </p>
-                          </div>
-                          <div className="bg-white dark:bg-[#1E293B] p-4 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
-                            <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-medium mb-1 flex items-center space-x-1">
-                              <Clock className="w-3 h-3" />
-                              <span>Duración</span>
-                            </p>
-                            <p className="text-3xl font-bold text-slate-700 dark:text-slate-400">
-                              {reporteDetallado.resumen.duracionSegundos.toFixed(2)}s
-                            </p>
-                          </div>
-                          <div className="bg-white dark:bg-[#1E293B] p-4 rounded-lg border border-yellow-200 dark:border-yellow-800 shadow-sm">
-                            <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-medium mb-1">Advertencias</p>
-                            <p className="text-3xl font-bold text-yellow-600 dark:text-yellow-400">
-                              {reporteDetallado.resumen.totalAdvertencias || 0}
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                      )}
+                    </div>
                   )}
 
-                  {/* Errores por Hoja (si existen) */}
-                  {reporteDetallado.erroresPorHoja && Object.keys(reporteDetallado.erroresPorHoja).length > 0 && (
-                    <Card className="border-orange-200 dark:border-orange-800">
-                      <CardHeader>
-                        <CardTitle className="text-slate-900 dark:text-[#F1F5F9] flex items-center space-x-2">
-                          <AlertTriangle className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                          <span>Errores Detectados por Hoja</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        {Object.entries(reporteDetallado.erroresPorHoja).map(([hoja, errores]) => (
-                          <div key={hoja} className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
-                            <h3 className="font-bold text-orange-700 dark:text-orange-400 mb-3 flex items-center space-x-2">
-                              <FileSpreadsheet className="w-4 h-4" />
-                              <span>Hoja: {hoja}</span>
-                              <Badge className="bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-400">
-                                {errores.length} errores
-                              </Badge>
-                            </h3>
-                            <div className="space-y-2 max-h-64 overflow-y-auto">
-                              {errores.map((error, idx) => (
-                                <div
-                                  key={idx}
-                                  className="bg-white dark:bg-[#1E293B] p-3 rounded border border-orange-200 dark:border-orange-800 text-sm"
-                                >
-                                  <div className="flex justify-between items-start mb-2">
-                                    <span className="font-mono font-bold text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-1 rounded">
-                                      Fila {error.fila} • {error.columna}
-                                    </span>
-                                  </div>
-                                  <p className="text-red-700 dark:text-red-300 mb-1">
-                                    <strong>Error:</strong> {error.error}
-                                  </p>
-                                  {error.valorEncontrado && (
-                                    <p className="text-gray-700 dark:text-gray-300 text-xs">
-                                      <strong>Valor:</strong> <code className="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">{error.valorEncontrado}</code>
-                                    </p>
-                                  )}
-                                  {error.sugerencia && (
-                                    <p className="text-blue-700 dark:text-blue-400 mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs border-l-2 border-blue-500">
-                                      💡 {error.sugerencia}
-                                    </p>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
+                  {/* Tabla de Inventario */}
+                  {tablaActiva === 'inventario' && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 dark:bg-[#273043] border-b-2 border-slate-300 dark:border-[#374151]">
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Código</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Producto</th>
+                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Disponible</th>
+                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Reservada</th>
+                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Stock Min</th>
+                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Stock Max</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Ubicación</th>
+                            <th className="text-center py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9]">Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {datosImportados.inventario.map((item, idx) => (
+                            <tr key={idx} className="border-b border-slate-200 dark:border-[#374151] hover:bg-slate-50 dark:hover:bg-[#334155]">
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] font-mono text-sm text-slate-900 dark:text-[#F1F5F9]">{item.codigoProducto}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-900 dark:text-[#F1F5F9]">{item.nombreProducto}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right font-semibold text-blue-600 dark:text-blue-400">{item.cantidadDisponible}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right text-slate-600 dark:text-[#E5E7EB]">{item.cantidadReservada || 0}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right text-slate-600 dark:text-[#E5E7EB]">{item.stockMinimo || '-'}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right text-slate-600 dark:text-[#E5E7EB]">{item.stockMaximo || '-'}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-600 dark:text-[#E5E7EB]">{item.ubicacion || '-'}</td>
+                              <td className="py-3 px-4 text-center">
+                                <Badge className={`${
+                                  item.estadoStock === 'normal' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400' :
+                                  item.estadoStock === 'bajo' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400' :
+                                  'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'
+                                }`}>
+                                  {item.estadoStock}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {datosImportados.inventario.length === 0 && (
+                        <div className="text-center py-12 text-slate-500 dark:text-[#E5E7EB]">
+                          <Database className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                          <p>No hay inventario en esta importación</p>
+                        </div>
+                      )}
+                    </div>
                   )}
 
-                  {/* Resultado Detallado (JSON opcional) */}
-                  {reporteDetallado.resultadoDetallado && (
-                    <details className="bg-slate-50 dark:bg-[#273043] border border-slate-200 dark:border-[#374151] rounded-lg p-4">
-                      <summary className="cursor-pointer font-semibold text-slate-900 dark:text-[#F1F5F9] hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                        Ver datos técnicos completos (JSON)
-                      </summary>
-                      <pre className="mt-4 p-4 bg-slate-900 dark:bg-black text-green-400 rounded-lg overflow-x-auto text-xs font-mono">
-                        {JSON.stringify(JSON.parse(reporteDetallado.resultadoDetallado), null, 2)}
-                      </pre>
-                    </details>
+                  {/* Tabla de Ventas */}
+                  {tablaActiva === 'ventas' && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 dark:bg-[#273043] border-b-2 border-slate-300 dark:border-[#374151]">
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">N° Orden</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Fecha</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Cliente</th>
+                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Subtotal</th>
+                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Descuento</th>
+                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Impuestos</th>
+                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Total</th>
+                            <th className="text-center py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Pago</th>
+                            <th className="text-center py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9]">Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {datosImportados.ventas.map((venta, idx) => (
+                            <tr key={idx} className="border-b border-slate-200 dark:border-[#374151] hover:bg-slate-50 dark:hover:bg-[#334155]">
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] font-mono text-sm text-slate-900 dark:text-[#F1F5F9]">{venta.numeroOrden}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-sm text-slate-600 dark:text-[#E5E7EB]">
+                                {new Date(venta.fechaVenta).toLocaleDateString('es-CO')}
+                              </td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-900 dark:text-[#F1F5F9]">{venta.clienteNombre}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right text-slate-600 dark:text-[#E5E7EB]">${venta.montoSubtotal.toLocaleString('es-CO')}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right text-orange-600 dark:text-orange-400">
+                                {venta.montoDescuento ? `-$${venta.montoDescuento.toLocaleString('es-CO')}` : '-'}
+                              </td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right text-slate-600 dark:text-[#E5E7EB]">
+                                {venta.montoImpuestos ? `+$${venta.montoImpuestos.toLocaleString('es-CO')}` : '-'}
+                              </td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right font-bold text-green-600 dark:text-green-400">
+                                ${venta.montoTotal.toLocaleString('es-CO')}
+                              </td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-center text-xs text-slate-600 dark:text-[#E5E7EB]">{venta.metodoPago}</td>
+                              <td className="py-3 px-4 text-center">
+                                <Badge className={venta.estado === 'completado' 
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400' 
+                                  : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400'
+                                }>
+                                  {venta.estado}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {datosImportados.ventas.length === 0 && (
+                        <div className="text-center py-12 text-slate-500 dark:text-[#E5E7EB]">
+                          <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                          <p>No hay ventas en esta importación</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Tabla de Financieros */}
+                  {tablaActiva === 'financieros' && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 dark:bg-[#273043] border-b-2 border-slate-300 dark:border-[#374151]">
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Tipo</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Categoría</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Concepto</th>
+                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Monto</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Fecha</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9]">Beneficiario</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {datosImportados.financieros.map((item, idx) => (
+                            <tr key={idx} className="border-b border-slate-200 dark:border-[#374151] hover:bg-slate-50 dark:hover:bg-[#334155]">
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151]">
+                                <Badge className={`${
+                                  item.tipoDato === 'ingreso' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400' :
+                                  item.tipoDato === 'gasto' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400' :
+                                  'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400'
+                                }`}>
+                                  {item.tipoDato}
+                                </Badge>
+                              </td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-900 dark:text-[#F1F5F9]">{item.categoria}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-900 dark:text-[#F1F5F9]">{item.concepto}</td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right font-bold">
+                                <span className={item.tipoDato === 'ingreso' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                                  {item.tipoDato === 'ingreso' ? '+' : '-'}${item.monto.toLocaleString('es-CO')}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-sm text-slate-600 dark:text-[#E5E7EB]">
+                                {new Date(item.fechaRegistro).toLocaleDateString('es-CO')}
+                              </td>
+                              <td className="py-3 px-4 text-slate-600 dark:text-[#E5E7EB]">{item.beneficiario || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {datosImportados.financieros.length === 0 && (
+                        <div className="text-center py-12 text-slate-500 dark:text-[#E5E7EB]">
+                          <Database className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                          <p>No hay datos financieros en esta importación</p>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </>
               ) : (
-                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                <div className="flex flex-col items-center justify-center h-full space-y-4">
                   <XCircle className="w-16 h-16 text-red-600 dark:text-red-400" />
                   <p className="text-slate-600 dark:text-[#E5E7EB] text-center">
-                    No se pudo cargar el reporte detallado.
-                    <br />
-                    <span className="text-sm">Por favor, intenta nuevamente más tarde.</span>
+                    No se pudieron cargar los datos importados.
                   </p>
                 </div>
               )}
             </div>
 
-            {/* Footer del Modal */}
-            <div className="flex justify-end space-x-3 p-6 border-t border-slate-200 dark:border-[#374151]">
+            {/* Footer */}
+            <div className="flex justify-between items-center p-6 border-t border-slate-200 dark:border-[#374151] bg-slate-50 dark:bg-[#273043]">
+              <div className="text-sm text-slate-600 dark:text-[#E5E7EB]">
+                {datosImportados && (
+                  <span>Mostrando hasta 100 registros más recientes por tabla</span>
+                )}
+              </div>
               <Button
                 variant="outline"
-                onClick={() => setShowReportModal(false)}
+                onClick={() => setShowDataModal(false)}
                 className="border-slate-300 dark:border-[#374151] text-slate-700 dark:text-[#E5E7EB]"
               >
                 Cerrar
               </Button>
-              {reporteDetallado && (
-                <Button
-                  variant="default"
-                  onClick={() => {
-                    const dataStr = JSON.stringify(reporteDetallado, null, 2);
-                    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-                    const url = URL.createObjectURL(dataBlob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = `reporte_${reporteDetallado.importId}.json`;
-                    link.click();
-                  }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white flex items-center space-x-2"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Descargar JSON</span>
-                </Button>
-              )}
             </div>
           </motion.div>
         </div>
@@ -1043,11 +1113,11 @@ export function DataLoadingPanel() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleVerReporteDetallado(importResult.importId!)}
+                          onClick={() => handleVerDatosImportados(importResult.importId!)}
                           className="flex items-center space-x-2"
                         >
                           <Eye className="w-4 h-4" />
-                          <span>Ver Reporte Detallado</span>
+                          <span>Ver Datos Importados</span>
                         </Button>
                         <Button
                           variant="default"
@@ -1135,10 +1205,10 @@ export function DataLoadingPanel() {
                                   variant="ghost" 
                                   size="sm" 
                                   className="flex items-center space-x-1 hover:bg-slate-100 dark:hover:bg-[#334155] text-slate-700 dark:text-[#E5E7EB] transition-colors duration-200"
-                                  onClick={() => handleVerReporteDetallado(item.id)}
+                                  onClick={() => handleVerDatosImportados(item.id)}
                                 >
                                   <Eye className="w-4 h-4" />
-                                  <span>Ver</span>
+                                  <span>Ver Datos</span>
                                 </Button>
                               </div>
                             </td>
