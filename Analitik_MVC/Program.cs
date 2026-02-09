@@ -10,6 +10,16 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
 
+builder.Services.AddAuthentication("Cookies").AddCookie
+    (options =>
+    {
+        options.LoginPath = "/Usuario/Login";
+        options.AccessDeniedPath = "/Usuario/AccessDenied";
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
+        options.Cookie.SameSite = SameSiteMode.Lax; // o None + Secure si cross-site
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    });
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -42,6 +52,8 @@ var app = builder.Build();
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllerRoute(

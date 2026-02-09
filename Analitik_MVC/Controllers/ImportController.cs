@@ -1,12 +1,17 @@
 using Analitik_MVC.Data;
+using Analitik_MVC.DTOs;
 using Analitik_MVC.DTOs.Import;
 using Analitik_MVC.Enums;
+using Analitik_MVC.Models;
 using Analitik_MVC.Services.Data;
 using Analitik_MVC.Services.Database;
 using Analitik_MVC.Services.Excel;
 using ClosedXML.Excel;
+using DocumentFormat.OpenXml.InkML;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace Analitik_MVC.Controllers;
 
@@ -52,8 +57,8 @@ public class ImportController : ControllerBase
     [RequestSizeLimit(10 * 1024 * 1024)] // 10 MB límite
     public async Task<IActionResult> ImportarExcel([FromForm] IFormFile archivo)
     {
-        Guid empresaId = Guid.Parse("38950573-d769-49e3-a3f8-71bc6362508a");
-        Guid id_empresa = Guid.Parse("922096db-178b-457f-bcc3-d217761f093e");
+        Guid empresaId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+        Guid id_empresa = Guid.Parse(User.FindFirst(ClaimTypes.Name)?.Value!);
         _logger.LogInformation($"Iniciando importación de Excel para empresa {empresaId}");
 
         if (archivo == null || archivo.Length == 0)
@@ -83,10 +88,10 @@ public class ImportController : ControllerBase
             // NIVEL 1: VALIDACIÓN DE ARCHIVO
             // ======================================
             using var archivoStream = archivo.OpenReadStream();
-            
+
             var validacionArchivo = _excelValidationService.ValidarArchivoExcel(
-                archivoStream, 
-                archivo.FileName, 
+                archivoStream,
+                archivo.FileName,
                 archivo.Length);
 
             if (!validacionArchivo.IsSuccess)
@@ -105,7 +110,7 @@ public class ImportController : ControllerBase
                 empresaId,
                 archivo.FileName,
                 archivo.Length,
-                archivoStream, 
+                archivoStream,
                 DateTime.UtcNow); // Cambiado de DateTime a DateTime
 
             _logger.LogInformation("Importación {ImportId} registrada", importacionId);
@@ -189,7 +194,7 @@ public class ImportController : ControllerBase
             // 3.1 Leer PRODUCTOS
             var hojaProductos = workbook.Worksheet("PRODUCTOS");
             var (productos, validacionProductos) = _excelReaderService.LeerYMapearProductos(hojaProductos, id_empresa);
-            
+
             if (!validacionProductos.IsSuccess)
             {
                 await _importLogService.RegistrarCargaFallidaAsync(
@@ -220,8 +225,8 @@ public class ImportController : ControllerBase
             // 3.2 Leer INVENTARIO
             var hojaInventario = workbook.Worksheet("INVENTARIO");
             var (inventarios, validacionInventario) = _excelReaderService.LeerYMapearInventario(
-                hojaInventario, 
-                productos, 
+                hojaInventario,
+                productos,
                 id_empresa);
 
             if (!validacionInventario.IsSuccess)
@@ -254,8 +259,8 @@ public class ImportController : ControllerBase
             // 3.3 Leer VENTAS
             var hojaVentas = workbook.Worksheet("VENTAS");
             var (ventas, validacionVentas) = _excelReaderService.LeerYMapearVentas(
-                hojaVentas, 
-                productos, 
+                hojaVentas,
+                productos,
                 id_empresa);
 
             if (!validacionVentas.IsSuccess)
@@ -288,7 +293,7 @@ public class ImportController : ControllerBase
             // 3.4 Leer FINANCIEROS
             var hojaFinancieros = workbook.Worksheet("FINANCIEROS");
             var (financieros, validacionFinancieros) = _excelReaderService.LeerYMapearFinancieros(
-                hojaFinancieros, 
+                hojaFinancieros,
                 id_empresa);
 
             if (!validacionFinancieros.IsSuccess)
@@ -333,7 +338,7 @@ public class ImportController : ControllerBase
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error en carga atómica de datos");
-                
+
                 await _importLogService.RegistrarCargaFallidaAsync(
                     importacionId.Value,
                     new List<ErrorValidacion>
@@ -431,7 +436,7 @@ public class ImportController : ControllerBase
     [HttpGet("status/{importId}")]
     public async Task<IActionResult> GetEstadoImportacion(Guid importId)
     {
-        
+
         var importacion = await _dbContext.ImportacionesDatos
             .Where(i => i.Id == importId)
             .Select(i => new
@@ -568,9 +573,9 @@ public class ImportController : ControllerBase
     /// Lista historial de importaciones de una empresa
     /// </summary>
     [HttpGet("history")]
-    public async Task<IActionResult> GetHistorialImportaciones( [FromQuery] int pagina = 1, [FromQuery] int tamano = 20)
+    public async Task<IActionResult> GetHistorialImportaciones([FromQuery] int pagina = 1, [FromQuery] int tamano = 20)
     {
-        Guid empresaId = Guid.Parse("38950573-d769-49e3-a3f8-71bc6362508a");
+        Guid empresaId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
 
         var importaciones = await _dbContext.ImportacionesDatos
             .Where(i => i.EmpresaId == empresaId)
@@ -598,6 +603,39 @@ public class ImportController : ControllerBase
             pagina = pagina,
             tamano = tamano,
             totalPaginas = (int)Math.Ceiling(total / (double)tamano)
+        });
+    }
+
+    [Authorize]
+    [HttpGet("preview")]
+    public IActionResult GetPreview()
+    {
+        var preview = _dbContext.Productos
+    .Where(p => p.EmpresaId == new Guid("922096db-178b-457f-bcc3-d217761f093e") && p.Activo)
+    .Select(p => new ProductPreviewDTO
+    {
+        ProductId = p.Id,
+        ProductName = p.Nombre,
+        ProductCode = p.CodigoProducto,
+        // todas las órdenes asociadas al producto
+        OrderNumbers = p.DetallesVenta
+                        .Select(dv => dv.Venta.NumeroOrden)
+                        .Distinct()
+                        .ToList(),
+        // totales por línea de venta sumados
+        OrderTotals = p.DetallesVenta
+                        .Select(dv => dv.Total)
+                        .ToList(),
+        Stock = p.Inventario != null ? p.Inventario.CantidadDisponible : 0
+    })
+    .OrderBy(p => p.ProductName)
+    .ToList();
+
+        return Ok(new
+        {
+            success = true,
+            message = $"Vista previa cargada correctamente and {User.FindFirstValue(ClaimTypes.Name)}",
+            data = preview
         });
     }
 }

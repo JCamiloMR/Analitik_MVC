@@ -3,6 +3,7 @@ using Analitik_MVC.Enums;
 using Analitik_MVC.Models;
 using Analitik_MVC.Models.ViewModels;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -52,18 +53,18 @@ namespace Analitik_MVC.Controllers
                         return Json(new { success = false, error = "Credenciales incorrectas" });
                     }
 
-                    /***
-                     * // Asegúrate de que el campo Id es tipo Guid en el modelo
+                    // Crear las claims
                     var claims = new List<Claim>
                     {
                         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                        new Claim(ClaimTypes.Name, user.EmpresaId.ToString()),
                         new Claim(ClaimTypes.Email, user.Email),
+                        new Claim(ClaimTypes.Role, user.Rol!)
                     };
 
                     var identity = new ClaimsIdentity(claims, "Cookies");
                     var principal = new ClaimsPrincipal(identity);
                     await HttpContext.SignInAsync("Cookies", principal);
-                    **/
                     return Json(new
                     {
                         success = true,
@@ -179,6 +180,32 @@ namespace Analitik_MVC.Controllers
                     detail = ex.Message
                 });
             }
+        }
+
+        [Authorize] // asegura que User esté lleno
+        [HttpGet("Me")]
+        public IActionResult Me()
+        {
+            return Ok(new
+            {
+                authenticated = User.Identity?.IsAuthenticated ?? false,
+                user = new
+                {
+                    id = User.FindFirstValue(ClaimTypes.NameIdentifier),
+                    empresaId = User.FindFirstValue(ClaimTypes.Name),
+                    email = User.FindFirstValue(ClaimTypes.Email),
+                    role = User.FindFirstValue(ClaimTypes.Role)
+                }
+            });
+        }
+
+
+        [HttpGet("LogOut")]
+        public async Task<IActionResult> LogOut()
+        {
+            await HttpContext.SignOutAsync("Cookies");
+
+            return RedirectToAction("Index", "Home");
         }
 
 
