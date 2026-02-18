@@ -465,10 +465,19 @@ public class ImportController : ControllerBase
     /// <summary>
     /// GET /api/import/report/{importId}
     /// Retorna los DATOS IMPORTADOS en formato tabular para visualización tipo Excel
+    /// CON PAGINACIÓN Y FILTRADO POR IMPORTACIÓN ESPECÍFICA
     /// </summary>
     [HttpGet("report/{importId}")]
-    public async Task<IActionResult> GetReporteImportacion(Guid importId)
+    public async Task<IActionResult> GetReporteImportacion(
+        Guid importId,
+        [FromQuery] int pagina = 1,
+        [FromQuery] int tamanoPagina = 10,
+        [FromQuery] string? tipoHoja = null)
     {
+        // Validar parámetros de paginación
+        if (pagina < 1) pagina = 1;
+        if (tamanoPagina < 1 || tamanoPagina > 100) tamanoPagina = 10;
+
         var importacion = await _dbContext.ImportacionesDatos
             .Where(i => i.Id == importId)
             .Select(i => new
@@ -479,7 +488,9 @@ public class ImportController : ControllerBase
                 i.Estado,
                 i.EmpresaId,
                 i.RegistrosCargados,
-                i.TipoDatos
+                i.TipoDatos,
+                i.FechaInicioEtl,
+                i.FechaFinEtl
             })
             .FirstOrDefaultAsync();
 
@@ -488,8 +499,12 @@ public class ImportController : ControllerBase
             return NotFound(new { mensaje = "Importación no encontrada" });
         }
 
-        // Obtener datos importados por tipo
-        var datosImportados = new
+        // Calcular ventana de tiempo de la importación (±5 segundos para margen)
+        var fechaInicio = importacion.FechaInicioEtl?.AddSeconds(-5) ?? importacion.FechaImportacion.AddSeconds(-5);
+        var fechaFin = importacion.FechaFinEtl?.AddSeconds(5) ?? DateTime.UtcNow;
+
+        // Respuesta base con metadata
+        var response = new
         {
             metadata = new
             {
@@ -497,29 +512,78 @@ public class ImportController : ControllerBase
                 nombreArchivo = importacion.NombreArchivo,
                 fechaImportacion = importacion.FechaImportacion,
                 estado = importacion.Estado,
-                registrosCargados = importacion.RegistrosCargados
+                registrosCargados = importacion.RegistrosCargados,
+                tipoDatos = importacion.TipoDatos
             },
-            productos = await _dbContext.Productos
-                .Where(p => p.EmpresaId == importacion.EmpresaId)
-                .OrderByDescending(p => p.CreatedAt)
-                .Take(100) // Limitar para performance
+            paginacion = new
+            {
+                paginaActual = pagina,
+                tamanoPagina = tamanoPagina,
+                totalRegistros = 0,
+                totalPaginas = 0
+            },
+            datos = new Dictionary<string, object>()
+        };
+
+        // Si se especifica tipo de hoja, solo traer esa hoja
+        var tipoHojaNormalizado = tipoHoja?.ToLower();
+
+        // PRODUCTOS
+        if (tipoHojaNormalizado == null || tipoHojaNormalizado == "productos")
+        {
+            var queryProductos = _dbContext.Productos
+                .Where(p => p.EmpresaId == importacion.EmpresaId &&
+                           p.CreatedAt >= fechaInicio &&
+                           p.CreatedAt <= fechaFin)
+                .OrderByDescending(p => p.CreatedAt);
+
+            var totalProductos = await queryProductos.CountAsync();
+            var productos = await queryProductos
+                .Skip((pagina - 1) * tamanoPagina)
+                .Take(tamanoPagina)
                 .Select(p => new
                 {
                     p.CodigoProducto,
                     p.Nombre,
                     p.Categoria,
+                    p.Subcategoria,
                     p.Marca,
                     p.PrecioVenta,
                     p.CostoUnitario,
                     p.UnidadMedida,
                     p.Activo,
-                    p.RequiereInventario
+                    p.RequiereInventario,
+                    p.CreatedAt
                 })
-                .ToListAsync(),
-            inventario = await _dbContext.Inventarios
-                .Where(i => i.Producto.EmpresaId == importacion.EmpresaId)
-                .OrderByDescending(i => i.CreatedAt)
-                .Take(100)
+                .ToListAsync();
+
+            response.datos["productos"] = new
+            {
+                registros = productos,
+                total = totalProductos,
+                totalPaginas = (int)Math.Ceiling(totalProductos / (double)tamanoPagina)
+            };
+
+            if (tipoHojaNormalizado == "productos")
+            {
+                response.paginacion.GetType().GetProperty("totalRegistros")?.SetValue(response.paginacion, totalProductos);
+                response.paginacion.GetType().GetProperty("totalPaginas")?.SetValue(response.paginacion, (int)Math.Ceiling(totalProductos / (double)tamanoPagina));
+            }
+        }
+
+        // INVENTARIO
+        if (tipoHojaNormalizado == null || tipoHojaNormalizado == "inventario")
+        {
+            var queryInventario = _dbContext.Inventarios
+                .Where(i => i.Producto.EmpresaId == importacion.EmpresaId &&
+                           i.CreatedAt >= fechaInicio &&
+                           i.CreatedAt <= fechaFin)
+                .OrderByDescending(i => i.CreatedAt);
+
+            var totalInventario = await queryInventario.CountAsync();
+            var inventario = await queryInventario
+                .Skip((pagina - 1) * tamanoPagina)
+                .Take(tamanoPagina)
                 .Select(i => new
                 {
                     CodigoProducto = i.Producto.CodigoProducto,
@@ -529,13 +593,38 @@ public class ImportController : ControllerBase
                     i.StockMinimo,
                     i.StockMaximo,
                     i.Ubicacion,
-                    EstadoStock = i.EstadoStock.ToString()
+                    EstadoStock = i.EstadoStock.ToString(),
+                    i.CreatedAt
                 })
-                .ToListAsync(),
-            ventas = await _dbContext.Ventas
-                .Where(v => v.EmpresaId == importacion.EmpresaId)
-                .OrderByDescending(v => v.FechaVenta)
-                .Take(100)
+                .ToListAsync();
+
+            response.datos["inventario"] = new
+            {
+                registros = inventario,
+                total = totalInventario,
+                totalPaginas = (int)Math.Ceiling(totalInventario / (double)tamanoPagina)
+            };
+
+            if (tipoHojaNormalizado == "inventario")
+            {
+                response.paginacion.GetType().GetProperty("totalRegistros")?.SetValue(response.paginacion, totalInventario);
+                response.paginacion.GetType().GetProperty("totalPaginas")?.SetValue(response.paginacion, (int)Math.Ceiling(totalInventario / (double)tamanoPagina));
+            }
+        }
+
+        // VENTAS
+        if (tipoHojaNormalizado == null || tipoHojaNormalizado == "ventas")
+        {
+            var queryVentas = _dbContext.Ventas
+                .Where(v => v.EmpresaId == importacion.EmpresaId &&
+                           v.CreatedAt >= fechaInicio &&
+                           v.CreatedAt <= fechaFin)
+                .OrderByDescending(v => v.FechaVenta);
+
+            var totalVentas = await queryVentas.CountAsync();
+            var ventas = await queryVentas
+                .Skip((pagina - 1) * tamanoPagina)
+                .Take(tamanoPagina)
                 .Select(v => new
                 {
                     v.NumeroOrden,
@@ -546,13 +635,38 @@ public class ImportController : ControllerBase
                     v.MontoImpuestos,
                     v.MontoTotal,
                     MetodoPago = v.MetodoPago.ToString(),
-                    Estado = v.Estado.ToString()
+                    Estado = v.Estado.ToString(),
+                    v.CreatedAt
                 })
-                .ToListAsync(),
-            financieros = await _dbContext.DatosFinancieros
-                .Where(f => f.EmpresaId == importacion.EmpresaId)
-                .OrderByDescending(f => f.FechaRegistro)
-                .Take(100)
+                .ToListAsync();
+
+            response.datos["ventas"] = new
+            {
+                registros = ventas,
+                total = totalVentas,
+                totalPaginas = (int)Math.Ceiling(totalVentas / (double)tamanoPagina)
+            };
+
+            if (tipoHojaNormalizado == "ventas")
+            {
+                response.paginacion.GetType().GetProperty("totalRegistros")?.SetValue(response.paginacion, totalVentas);
+                response.paginacion.GetType().GetProperty("totalPaginas")?.SetValue(response.paginacion, (int)Math.Ceiling(totalVentas / (double)tamanoPagina));
+            }
+        }
+
+        // FINANCIEROS
+        if (tipoHojaNormalizado == null || tipoHojaNormalizado == "financieros")
+        {
+            var queryFinancieros = _dbContext.DatosFinancieros
+                .Where(f => f.EmpresaId == importacion.EmpresaId &&
+                           f.CreatedAt >= fechaInicio &&
+                           f.CreatedAt <= fechaFin)
+                .OrderByDescending(f => f.FechaRegistro);
+
+            var totalFinancieros = await queryFinancieros.CountAsync();
+            var financieros = await queryFinancieros
+                .Skip((pagina - 1) * tamanoPagina)
+                .Take(tamanoPagina)
                 .Select(f => new
                 {
                     TipoDato = f.TipoDato.ToString(),
@@ -560,12 +674,26 @@ public class ImportController : ControllerBase
                     f.Concepto,
                     f.Monto,
                     f.FechaRegistro,
-                    f.Beneficiario
+                    f.Beneficiario,
+                    f.CreatedAt
                 })
-                .ToListAsync()
-        };
+                .ToListAsync();
 
-        return Ok(datosImportados);
+            response.datos["financieros"] = new
+            {
+                registros = financieros,
+                total = totalFinancieros,
+                totalPaginas = (int)Math.Ceiling(totalFinancieros / (double)tamanoPagina)
+            };
+
+            if (tipoHojaNormalizado == "financieros")
+            {
+                response.paginacion.GetType().GetProperty("totalRegistros")?.SetValue(response.paginacion, totalFinancieros);
+                response.paginacion.GetType().GetProperty("totalPaginas")?.SetValue(response.paginacion, (int)Math.Ceiling(totalFinancieros / (double)tamanoPagina));
+            }
+        }
+
+        return Ok(response);
     }
 
     /// <summary>

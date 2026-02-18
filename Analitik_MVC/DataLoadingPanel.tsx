@@ -50,55 +50,44 @@ interface RecentImport {
   duracionSegundos?: number;
 }
 
-// Interfaz para los datos importados (vista tabular)
-interface DatosImportados {
+// Interfaz para el reporte detallado
+interface ReporteDetallado {
   metadata: {
     importId: string;
     nombreArchivo: string;
     fechaImportacion: string;
     estado: string;
     registrosCargados: number;
+    tipoDatos: string;
   };
-  productos: Array<{
-    codigoProducto: string;
-    nombre: string;
-    categoria: string | null;
-    marca: string | null;
-    precioVenta: number;
-    costoUnitario: number | null;
-    unidadMedida: string;
-    activo: boolean;
-    requiereInventario: boolean;
-  }>;
-  inventario: Array<{
-    codigoProducto: string;
-    nombreProducto: string;
-    cantidadDisponible: number;
-    cantidadReservada: number | null;
-    stockMinimo: number | null;
-    stockMaximo: number | null;
-    ubicacion: string | null;
-    estadoStock: string;
-  }>;
-  ventas: Array<{
-    numeroOrden: string;
-    fechaVenta: string;
-    clienteNombre: string;
-    montoSubtotal: number;
-    montoDescuento: number | null;
-    montoImpuestos: number | null;
-    montoTotal: number;
-    metodoPago: string;
-    estado: string;
-  }>;
-  financieros: Array<{
-    tipoDato: string;
-    categoria: string;
-    concepto: string;
-    monto: number;
-    fechaRegistro: string;
-    beneficiario: string | null;
-  }>;
+  paginacion: {
+    paginaActual: number;
+    tamanoPagina: number;
+    totalRegistros: number;
+    totalPaginas: number;
+  };
+  datos: {
+    productos?: {
+      registros: any[];
+      total: number;
+      totalPaginas: number;
+    };
+    inventario?: {
+      registros: any[];
+      total: number;
+      totalPaginas: number;
+    };
+    ventas?: {
+      registros: any[];
+      total: number;
+      totalPaginas: number;
+    };
+    financieros?: {
+      registros: any[];
+      total: number;
+      totalPaginas: number;
+    };
+  };
 }
 
 // ===================================================================
@@ -119,11 +108,15 @@ export function DataLoadingPanel() {
   const [loadingImports, setLoadingImports] = useState(true);
   const [recentImports, setRecentImports] = useState<RecentImport[]>([]);
 
-  // Modal de datos importados (vista tabular)
-  const [showDataModal, setShowDataModal] = useState(false);
-  const [datosImportados, setDatosImportados] = useState<DatosImportados | null>(null);
-  const [loadingDatos, setLoadingDatos] = useState(false);
-  const [tablaActiva, setTablaActiva] = useState<'productos' | 'inventario' | 'ventas' | 'financieros'>('productos');
+  // Modal de reporte detallado
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reporteDetallado, setReporteDetallado] = useState<ReporteDetallado | null>(null);
+  const [loadingReporte, setLoadingReporte] = useState(false);
+  
+  // Estado para paginación y hoja activa
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [tamanoPagina] = useState(10);
+  const [hojaActiva, setHojaActiva] = useState<'productos' | 'inventario' | 'ventas' | 'financieros'>('productos');
 
   // Drag & drop state
   const [dragActive, setDragActive] = useState(false);
@@ -214,12 +207,14 @@ export function DataLoadingPanel() {
       setLoadingImports(true);
       
       const response = await fetch(
-        `/api/import/history?empresaId=${empresaId}&pagina=1&tamano=5`,
+        `https://localhost:7246/api/import/history?pagina=1&tamano=5`,
         {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json'
-          }
+          },
+            credentials: 'include' // 👈 CLAVE
+
         }
       );
 
@@ -284,7 +279,8 @@ export function DataLoadingPanel() {
       // 5. Enviar POST al backend
       const response = await fetch(`/api/import/excel`, {
         method: 'POST',
-        body: formData
+        body: formData,
+          credentials: 'include'
         // NO incluir Content-Type - el navegador lo establece automáticamente con boundary
       });
 
@@ -394,33 +390,50 @@ export function DataLoadingPanel() {
   };
 
   /**
-   * Cargar datos importados (vista tabular tipo Excel)
+   * Cargar reporte detallado con paginación
    */
-  const handleVerDatosImportados = async (importId: string) => {
-    setLoadingDatos(true);
-    setShowDataModal(true);
-    setTablaActiva('productos'); // Resetear pestaña activa
+  const handleVerReporteDetallado = async (importId: string, pagina: number = 1, hoja?: string) => {
+    setLoadingReporte(true);
+    if (!showReportModal) {
+      setShowReportModal(true);
+      setPaginaActual(1);
+      setHojaActiva('productos');
+    }
     
     try {
-      const response = await fetch(`/api/import/report/${importId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      const params = new URLSearchParams({
+        pagina: pagina.toString(),
+        tamanoPagina: tamanoPagina.toString()
       });
+      
+      if (hoja) {
+        params.append('tipoHoja', hoja);
+      }
+
+      const response = await fetch(
+        `https://localhost:7246/api/import/report/${importId}?${params.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        }
+      );
 
       if (response.ok) {
-        const data: DatosImportados = await response.json();
-        setDatosImportados(data);
+        const data: ReporteDetallado = await response.json();
+        setReporteDetallado(data);
+        setPaginaActual(pagina);
       } else {
-        console.error('Error al cargar datos:', response.statusText);
-        setDatosImportados(null);
+        console.error('Error al cargar reporte:', response.statusText);
+        setReporteDetallado(null);
       }
     } catch (error) {
-      console.error('Error loading data:', error);
-      setDatosImportados(null);
+      console.error('Error loading report:', error);
+      setReporteDetallado(null);
     } finally {
-      setLoadingDatos(false);
+      setLoadingReporte(false);
     }
   };
 
@@ -470,16 +483,16 @@ export function DataLoadingPanel() {
 
   return (
     <div className="min-h-full bg-slate-50 dark:bg-[#111827] transition-colors duration-200">
-      {/* Modal de Datos Importados (Vista Tabular Tipo Excel) */}
-      {showDataModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-hidden">
+      {/* Modal de Reporte Detallado */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-white dark:bg-[#1E293B] rounded-lg shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col"
+            className="bg-white dark:bg-[#1E293B] rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col"
           >
-            {/* Header */}
+            {/* Header del Modal */}
             <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-[#374151]">
               <div className="flex items-center space-x-3">
                 <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
@@ -487,274 +500,214 @@ export function DataLoadingPanel() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900 dark:text-[#F1F5F9]">
-                    Datos Importados
+                    Vista Previa de Datos Importados
                   </h2>
-                  {datosImportados && (
+                  {reporteDetallado && (
                     <p className="text-sm text-slate-600 dark:text-[#E5E7EB] mt-1">
-                      {datosImportados.metadata.nombreArchivo} • {datosImportados.metadata.registrosCargados} registros
+                      {reporteDetallado.metadata.nombreArchivo}
                     </p>
                   )}
                 </div>
               </div>
               <button
-                onClick={() => setShowDataModal(false)}
+                onClick={() => {
+                  setShowReportModal(false);
+                  setReporteDetallado(null);
+                  setPaginaActual(1);
+                  setHojaActiva('productos');
+                }}
                 className="p-2 hover:bg-slate-100 dark:hover:bg-[#334155] rounded-lg transition-colors"
               >
                 <X className="w-6 h-6 text-slate-600 dark:text-[#E5E7EB]" />
               </button>
             </div>
 
-            {/* Pestañas */}
-            <div className="flex space-x-1 p-4 border-b border-slate-200 dark:border-[#374151] bg-slate-50 dark:bg-[#273043]">
-              {['productos', 'inventario', 'ventas', 'financieros'].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setTablaActiva(tab as any)}
-                  className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                    tablaActiva === tab
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white dark:bg-[#1E293B] text-slate-700 dark:text-[#E5E7EB] hover:bg-slate-100 dark:hover:bg-[#334155]'
-                  }`}
-                >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)} {datosImportados && `(${(datosImportados as any)[tab]?.length || 0})`}
-                </button>
-              ))}
-            </div>
-
-            {/* Body con Tabla */}
-            <div className="flex-1 overflow-auto p-6">
-              {loadingDatos ? (
-                <div className="flex flex-col items-center justify-center h-full space-y-4">
+            {/* Body del Modal */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {loadingReporte ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
                   <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-slate-600 dark:text-[#E5E7EB]">Cargando datos importados...</p>
+                  <p className="text-slate-600 dark:text-[#E5E7EB]">Cargando datos...</p>
                 </div>
-              ) : datosImportados ? (
+              ) : reporteDetallado ? (
                 <>
-                  {/* Tabla de Productos */}
-                  {tablaActiva === 'productos' && (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr className="bg-slate-100 dark:bg-[#273043] border-b-2 border-slate-300 dark:border-[#374151]">
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Código</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Nombre</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Categoría</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Marca</th>
-                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Precio Venta</th>
-                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Costo</th>
-                            <th className="text-center py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Unidad</th>
-                            <th className="text-center py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9]">Activo</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {datosImportados.productos.map((producto, idx) => (
-                            <tr key={idx} className="border-b border-slate-200 dark:border-[#374151] hover:bg-slate-50 dark:hover:bg-[#334155]">
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] font-mono text-sm text-slate-900 dark:text-[#F1F5F9]">{producto.codigoProducto}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-900 dark:text-[#F1F5F9]">{producto.nombre}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-600 dark:text-[#E5E7EB]">{producto.categoria || '-'}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-600 dark:text-[#E5E7EB]">{producto.marca || '-'}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right font-semibold text-green-600 dark:text-green-400">
-                                ${producto.precioVenta.toLocaleString('es-CO')}
-                              </td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right text-slate-600 dark:text-[#E5E7EB]">
-                                ${producto.costoUnitario?.toLocaleString('es-CO') || '-'}
-                              </td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-center text-xs text-slate-600 dark:text-[#E5E7EB]">{producto.unidadMedida}</td>
-                              <td className="py-3 px-4 text-center">
-                                {producto.activo ? (
-                                  <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
-                                ) : (
-                                  <span className="inline-block w-2 h-2 bg-red-500 rounded-full"></span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {datosImportados.productos.length === 0 && (
-                        <div className="text-center py-12 text-slate-500 dark:text-[#E5E7EB]">
-                          <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                          <p>No hay productos en esta importación</p>
+                  {/* Metadata Card */}
+                  <Card className="bg-slate-50 dark:bg-[#273043] border-slate-200 dark:border-[#374151]">
+                    <CardHeader>
+                      <CardTitle className="text-slate-900 dark:text-[#F1F5F9] flex items-center space-x-2">
+                        <Database className="w-5 h-5" />
+                        <span>Información General</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="flex items-start space-x-3">
+                        <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                        <div>
+                          <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-medium">Fecha de Carga</p>
+                          <p className="text-sm text-slate-900 dark:text-[#F1F5F9] font-semibold">
+                            {new Date(reporteDetallado.metadata.fechaImportacion).toLocaleString('es-CO')}
+                          </p>
                         </div>
-                      )}
-                    </div>
-                  )}
+                      </div>
+                      <div className="flex items-start space-x-3">
+                        <CheckCircle2 className={`w-5 h-5 mt-0.5 ${
+                          reporteDetallado.metadata.estado === 'completado' 
+                            ? 'text-green-600 dark:text-green-400' 
+                            : 'text-red-600 dark:text-red-400'
+                        }`} />
+                        <div>
+                          <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-medium">Estado</p>
+                          <Badge className={`${
+                            reporteDetallado.metadata.estado === 'completado'
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+                              : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'
+                          }`}>
+                            {reporteDetallado.metadata.estado === 'completado' ? 'Exitoso' : 'Fallido'}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-3">
+                        <FileSpreadsheet className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                        <div>
+                          <p className="text-xs text-slate-600 dark:text-[#E5E7EB] font-medium">Registros Cargados</p>
+                          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                            {reporteDetallado.metadata.registrosCargados}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
 
-                  {/* Tabla de Inventario */}
-                  {tablaActiva === 'inventario' && (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr className="bg-slate-100 dark:bg-[#273043] border-b-2 border-slate-300 dark:border-[#374151]">
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Código</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Producto</th>
-                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Disponible</th>
-                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Reservada</th>
-                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Stock Min</th>
-                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Stock Max</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Ubicación</th>
-                            <th className="text-center py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9]">Estado</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {datosImportados.inventario.map((item, idx) => (
-                            <tr key={idx} className="border-b border-slate-200 dark:border-[#374151] hover:bg-slate-50 dark:hover:bg-[#334155]">
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] font-mono text-sm text-slate-900 dark:text-[#F1F5F9]">{item.codigoProducto}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-900 dark:text-[#F1F5F9]">{item.nombreProducto}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right font-semibold text-blue-600 dark:text-blue-400">{item.cantidadDisponible}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right text-slate-600 dark:text-[#E5E7EB]">{item.cantidadReservada || 0}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right text-slate-600 dark:text-[#E5E7EB]">{item.stockMinimo || '-'}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right text-slate-600 dark:text-[#E5E7EB]">{item.stockMaximo || '-'}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-600 dark:text-[#E5E7EB]">{item.ubicacion || '-'}</td>
-                              <td className="py-3 px-4 text-center">
-                                <Badge className={`${
-                                  item.estadoStock === 'normal' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400' :
-                                  item.estadoStock === 'bajo' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400' :
-                                  'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'
-                                }`}>
-                                  {item.estadoStock}
-                                </Badge>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {datosImportados.inventario.length === 0 && (
-                        <div className="text-center py-12 text-slate-500 dark:text-[#E5E7EB]">
-                          <Database className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                          <p>No hay inventario en esta importación</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {/* Tabs de Hojas */}
+                  <div className="flex space-x-2 border-b border-slate-200 dark:border-[#374151]">
+                    {(['productos', 'inventario', 'ventas', 'financieros'] as const).map((hoja) => (
+                      <button
+                        key={hoja}
+                        onClick={() => {
+                          setHojaActiva(hoja);
+                          setPaginaActual(1);
+                          handleVerReporteDetallado(reporteDetallado.metadata.importId, 1, hoja);
+                        }}
+                        className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${
+                          hojaActiva === hoja
+                            ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                            : 'border-transparent text-slate-600 dark:text-[#E5E7EB] hover:text-blue-600 dark:hover:text-blue-400'
+                        }`}
+                      >
+                        {hoja.toUpperCase()}
+                        {reporteDetallado.datos[hoja] && (
+                          <span className="ml-2 text-xs bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+                            {reporteDetallado.datos[hoja]!.total}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
 
-                  {/* Tabla de Ventas */}
-                  {tablaActiva === 'ventas' && (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr className="bg-slate-100 dark:bg-[#273043] border-b-2 border-slate-300 dark:border-[#374151]">
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">N° Orden</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Fecha</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Cliente</th>
-                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Subtotal</th>
-                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Descuento</th>
-                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Impuestos</th>
-                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Total</th>
-                            <th className="text-center py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Pago</th>
-                            <th className="text-center py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9]">Estado</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {datosImportados.ventas.map((venta, idx) => (
-                            <tr key={idx} className="border-b border-slate-200 dark:border-[#374151] hover:bg-slate-50 dark:hover:bg-[#334155]">
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] font-mono text-sm text-slate-900 dark:text-[#F1F5F9]">{venta.numeroOrden}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-sm text-slate-600 dark:text-[#E5E7EB]">
-                                {new Date(venta.fechaVenta).toLocaleDateString('es-CO')}
-                              </td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-900 dark:text-[#F1F5F9]">{venta.clienteNombre}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right text-slate-600 dark:text-[#E5E7EB]">${venta.montoSubtotal.toLocaleString('es-CO')}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right text-orange-600 dark:text-orange-400">
-                                {venta.montoDescuento ? `-$${venta.montoDescuento.toLocaleString('es-CO')}` : '-'}
-                              </td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right text-slate-600 dark:text-[#E5E7EB]">
-                                {venta.montoImpuestos ? `+$${venta.montoImpuestos.toLocaleString('es-CO')}` : '-'}
-                              </td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right font-bold text-green-600 dark:text-green-400">
-                                ${venta.montoTotal.toLocaleString('es-CO')}
-                              </td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-center text-xs text-slate-600 dark:text-[#E5E7EB]">{venta.metodoPago}</td>
-                              <td className="py-3 px-4 text-center">
-                                <Badge className={venta.estado === 'completado' 
-                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400' 
-                                  : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400'
-                                }>
-                                  {venta.estado}
-                                </Badge>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {datosImportados.ventas.length === 0 && (
-                        <div className="text-center py-12 text-slate-500 dark:text-[#E5E7EB]">
-                          <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                          <p>No hay ventas en esta importación</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {/* Tabla de Datos */}
+                  <Card className="border-slate-200 dark:border-[#374151]">
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        {reporteDetallado.datos[hojaActiva] && reporteDetallado.datos[hojaActiva]!.registros.length > 0 ? (
+                          <>
+                            <table className="w-full text-sm">
+                              <thead className="bg-slate-100 dark:bg-[#1E293B] border-b border-slate-200 dark:border-[#374151]">
+                                <tr>
+                                  {Object.keys(reporteDetallado.datos[hojaActiva]!.registros[0] || {})
+                                    .filter(key => key !== 'createdAt')
+                                    .map((key) => (
+                                      <th key={key} className="text-left py-3 px-4 font-semibold text-slate-700 dark:text-[#E5E7EB]">
+                                        {key.replace(/([A-Z])/g, ' $1').trim().toUpperCase()}
+                                      </th>
+                                    ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {reporteDetallado.datos[hojaActiva]!.registros.map((registro: any, idx: number) => (
+                                  <tr 
+                                    key={idx}
+                                    className="border-b border-slate-100 dark:border-[#374151] hover:bg-slate-50 dark:hover:bg-[#1E293B] transition-colors"
+                                  >
+                                    {Object.entries(registro)
+                                      .filter(([key]) => key !== 'createdAt')
+                                      .map(([key, value], cellIdx) => (
+                                        <td key={cellIdx} className="py-3 px-4 text-slate-900 dark:text-[#F1F5F9]">
+                                          {typeof value === 'boolean' 
+                                            ? (value ? '✅' : '❌')
+                                            : typeof value === 'number'
+                                            ? value.toLocaleString('es-CO')
+                                            : value?.toString() || '-'}
+                                        </td>
+                                      ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
 
-                  {/* Tabla de Financieros */}
-                  {tablaActiva === 'financieros' && (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr className="bg-slate-100 dark:bg-[#273043] border-b-2 border-slate-300 dark:border-[#374151]">
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Tipo</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Categoría</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Concepto</th>
-                            <th className="text-right py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Monto</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9] border-r border-slate-200 dark:border-[#374151]">Fecha</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-[#F1F5F9]">Beneficiario</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {datosImportados.financieros.map((item, idx) => (
-                            <tr key={idx} className="border-b border-slate-200 dark:border-[#374151] hover:bg-slate-50 dark:hover:bg-[#334155]">
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151]">
-                                <Badge className={`${
-                                  item.tipoDato === 'ingreso' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400' :
-                                  item.tipoDato === 'gasto' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400' :
-                                  'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400'
-                                }`}>
-                                  {item.tipoDato}
-                                </Badge>
-                              </td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-900 dark:text-[#F1F5F9]">{item.categoria}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-slate-900 dark:text-[#F1F5F9]">{item.concepto}</td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-right font-bold">
-                                <span className={item.tipoDato === 'ingreso' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                                  {item.tipoDato === 'ingreso' ? '+' : '-'}${item.monto.toLocaleString('es-CO')}
-                                </span>
-                              </td>
-                              <td className="py-3 px-4 border-r border-slate-200 dark:border-[#374151] text-sm text-slate-600 dark:text-[#E5E7EB]">
-                                {new Date(item.fechaRegistro).toLocaleDateString('es-CO')}
-                              </td>
-                              <td className="py-3 px-4 text-slate-600 dark:text-[#E5E7EB]">{item.beneficiario || '-'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {datosImportados.financieros.length === 0 && (
-                        <div className="text-center py-12 text-slate-500 dark:text-[#E5E7EB]">
-                          <Database className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                          <p>No hay datos financieros en esta importación</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                            {/* Paginación */}
+                            {reporteDetallado.datos[hojaActiva]!.totalPaginas > 1 && (
+                              <div className="flex items-center justify-between p-4 border-t border-slate-200 dark:border-[#374151]">
+                                <p className="text-sm text-slate-600 dark:text-[#E5E7EB]">
+                                  Mostrando {((paginaActual - 1) * tamanoPagina) + 1} a{' '}
+                                  {Math.min(paginaActual * tamanoPagina, reporteDetallado.datos[hojaActiva]!.total)} de{' '}
+                                  {reporteDetallado.datos[hojaActiva]!.total} registros
+                                </p>
+                                <div className="flex space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleVerReporteDetallado(reporteDetallado.metadata.importId, paginaActual - 1, hojaActiva)}
+                                    disabled={paginaActual === 1 || loadingReporte}
+                                  >
+                                    Anterior
+                                  </Button>
+                                  <span className="flex items-center px-3 text-sm text-slate-700 dark:text-[#E5E7EB]">
+                                    Página {paginaActual} de {reporteDetallado.datos[hojaActiva]!.totalPaginas}
+                                  </span>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleVerReporteDetallado(reporteDetallado.metadata.importId, paginaActual + 1, hojaActiva)}
+                                    disabled={paginaActual === reporteDetallado.datos[hojaActiva]!.totalPaginas || loadingReporte}
+                                  >
+                                    Siguiente
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="text-center py-12 text-slate-500 dark:text-[#E5E7EB]">
+                            <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                            <p>No hay datos en esta hoja para esta importación</p>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
                 </>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full space-y-4">
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
                   <XCircle className="w-16 h-16 text-red-600 dark:text-red-400" />
                   <p className="text-slate-600 dark:text-[#E5E7EB] text-center">
-                    No se pudieron cargar los datos importados.
+                    No se pudo cargar el reporte detallado.
+                    <br />
+                    <span className="text-sm">Por favor, intenta nuevamente más tarde.</span>
                   </p>
                 </div>
               )}
             </div>
 
-            {/* Footer */}
-            <div className="flex justify-between items-center p-6 border-t border-slate-200 dark:border-[#374151] bg-slate-50 dark:bg-[#273043]">
-              <div className="text-sm text-slate-600 dark:text-[#E5E7EB]">
-                {datosImportados && (
-                  <span>Mostrando hasta 100 registros más recientes por tabla</span>
-                )}
-              </div>
+            {/* Footer del Modal */}
+            <div className="flex justify-end space-x-3 p-6 border-t border-slate-200 dark:border-[#374151]">
               <Button
                 variant="outline"
-                onClick={() => setShowDataModal(false)}
+                onClick={() => {
+                  setShowReportModal(false);
+                  setReporteDetallado(null);
+                  setPaginaActual(1);
+                  setHojaActiva('productos');
+                }}
                 className="border-slate-300 dark:border-[#374151] text-slate-700 dark:text-[#E5E7EB]"
               >
                 Cerrar
@@ -1113,11 +1066,11 @@ export function DataLoadingPanel() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleVerDatosImportados(importResult.importId!)}
+                          onClick={() => handleVerReporteDetallado(importResult.importId!)}
                           className="flex items-center space-x-2"
                         >
                           <Eye className="w-4 h-4" />
-                          <span>Ver Datos Importados</span>
+                          <span>Ver Reporte Detallado</span>
                         </Button>
                         <Button
                           variant="default"
@@ -1205,10 +1158,10 @@ export function DataLoadingPanel() {
                                   variant="ghost" 
                                   size="sm" 
                                   className="flex items-center space-x-1 hover:bg-slate-100 dark:hover:bg-[#334155] text-slate-700 dark:text-[#E5E7EB] transition-colors duration-200"
-                                  onClick={() => handleVerDatosImportados(item.id)}
+                                  onClick={() => handleVerReporteDetallado(item.id)}
                                 >
                                   <Eye className="w-4 h-4" />
-                                  <span>Ver Datos</span>
+                                  <span>Ver</span>
                                 </Button>
                               </div>
                             </td>
