@@ -437,7 +437,7 @@ public class ImportController : ControllerBase
     public async Task<IActionResult> GetEstadoImportacion(Guid importId)
     {
 
-        var importacion = await _dbContext.ImportacionesDatos
+        var importacion = await _dbContext.ImportacionesDatosLogs
             .Where(i => i.Id == importId)
             .Select(i => new
             {
@@ -469,7 +469,7 @@ public class ImportController : ControllerBase
     [HttpGet("report/{importId}")]
     public async Task<IActionResult> GetReporteImportacion(Guid importId)
     {
-        var importacion = await _dbContext.ImportacionesDatos
+        var importacion = await _dbContext.ImportacionesDatosLogs
             .Where(i => i.Id == importId)
             .Select(i => new
             {
@@ -577,7 +577,7 @@ public class ImportController : ControllerBase
     {
         Guid empresaId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
 
-        var importaciones = await _dbContext.ImportacionesDatos
+        var importaciones = await _dbContext.ImportacionesDatosLogs
             .Where(i => i.EmpresaId == empresaId)
             .OrderByDescending(i => i.FechaImportacion)
             .Skip((pagina - 1) * tamano)
@@ -593,7 +593,7 @@ public class ImportController : ControllerBase
             })
             .ToListAsync();
 
-        var total = await _dbContext.ImportacionesDatos
+        var total = await _dbContext.ImportacionesDatosLogs
             .CountAsync(i => i.EmpresaId == empresaId);
 
         return Ok(new
