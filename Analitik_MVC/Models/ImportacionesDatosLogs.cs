@@ -11,7 +11,7 @@ public class ImportacionesDatosLogs
 {
     [Key]
     [Column("id")]
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; }
 
     [Required]
     [Column("empresa_id")]
