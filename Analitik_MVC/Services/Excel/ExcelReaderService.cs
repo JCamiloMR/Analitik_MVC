@@ -485,6 +485,15 @@ public class ExcelReaderService
                     continue;
                 }
 
+                // VALIDACIÓN: Producto es servicio (no requiere inventario)
+                var producto = productosValidos.FirstOrDefault(p => p.CodigoProducto == codigo);
+                if (producto != null && !producto.RequiereInventario)
+                {
+                    advertencias.Add($"Fila {numeroFila}: Código '{codigo}' es un servicio (no requiere inventario). Línea omitida.");
+                    numeroFila++;
+                    continue;
+                }
+
                 int cantidad = _transformationService.ParseInt(cantidadRaw);
                 if (cantidad < 0)
                 {
@@ -583,6 +592,9 @@ public class ExcelReaderService
         var idxCliente = _validationService.GetColumnIndex(hoja, "cliente_nombre") ?? -1;
         var idxTotal = _validationService.GetColumnIndex(hoja, "monto_total") ?? -1;
         var idxMetodo = _validationService.GetColumnIndex(hoja, "metodo_pago") ?? -1;
+        var idxSubtotal = _validationService.GetColumnIndex(hoja, "monto_subtotal");
+        var idxDescuento = _validationService.GetColumnIndex(hoja, "monto_descuento");
+        var idxImpuestos = _validationService.GetColumnIndex(hoja, "monto_impuestos");
 
         if (idxOrden == -1 || idxFecha == -1 || idxCliente == -1 || idxTotal == -1 || idxMetodo == -1)
         {
@@ -674,6 +686,67 @@ public class ExcelReaderService
                 }
 
                 var montoTotal = _transformationService.ParseCurrency(totalRaw);
+                
+                // VALIDACIÓN: Coherencia de montos con tolerancia ±0.01
+                if (idxSubtotal.HasValue && idxDescuento.HasValue && idxImpuestos.HasValue)
+                {
+                    var subtotalRaw = fila.Cell(idxSubtotal.Value).Value;
+                    var descuentoRaw = fila.Cell(idxDescuento.Value).Value;
+                    var impuestosRaw = fila.Cell(idxImpuestos.Value).Value;
+
+                    if (!string.IsNullOrWhiteSpace(subtotalRaw.ToString()))
+                    {
+                        try
+                        {
+                            var montoSubtotal = _transformationService.ParseCurrency(subtotalRaw);
+                            var montoDescuento = string.IsNullOrWhiteSpace(descuentoRaw.ToString()) 
+                                ? 0m 
+                                : _transformationService.ParseCurrency(descuentoRaw);
+                            var montoImpuestos = string.IsNullOrWhiteSpace(impuestosRaw.ToString()) 
+                                ? 0m 
+                                : _transformationService.ParseCurrency(impuestosRaw);
+
+                            // Calcular total esperado
+                            var totalCalculado = montoSubtotal - montoDescuento + montoImpuestos;
+                            var diferencia = Math.Abs(montoTotal - totalCalculado);
+
+                            // Tolerancia de 1 centavo (±0.01) para errores de redondeo
+                            if (diferencia > 0.01m)
+                            {
+                                errores.Add(new ErrorValidacion
+                                {
+                                    Fila = numeroFila,
+                                    Columna = "monto_total",
+                                    Error = $"Total ({montoTotal:F2}) ? subtotal ({montoSubtotal:F2}) - descuento ({montoDescuento:F2}) + impuestos ({montoImpuestos:F2})",
+                                    ValorEncontrado = montoTotal.ToString("F2"),
+                                    Sugerencia = $"Esperado: {totalCalculado:F2} (tolerancia ±0.01 para redondeo)"
+                                });
+                                numeroFila++;
+                                continue;
+                            }
+
+                            // Validar descuento <= subtotal
+                            if (montoDescuento > montoSubtotal)
+                            {
+                                errores.Add(new ErrorValidacion
+                                {
+                                    Fila = numeroFila,
+                                    Columna = "monto_descuento",
+                                    Error = "No puede ser mayor que monto_subtotal",
+                                    ValorEncontrado = $"{montoDescuento:F2} (subtotal: {montoSubtotal:F2})"
+                                });
+                                numeroFila++;
+                                continue;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning("Error validando montos en fila {Fila}: {Error}", numeroFila, ex.Message);
+                            // Continuar sin rechazar la fila si hay error en validación de montos
+                        }
+                    }
+                }
+
                 var fechaVentaUtc = DateTime.SpecifyKind(
                     fechaVenta.Value,
                     DateTimeKind.Utc
@@ -722,6 +795,7 @@ public class ExcelReaderService
         var idxConcepto = _validationService.GetColumnIndex(hoja, "concepto") ?? -1;
         var idxMonto = _validationService.GetColumnIndex(hoja, "monto") ?? -1;
         var idxFecha = _validationService.GetColumnIndex(hoja, "fecha_registro") ?? -1;
+        var idxFechaPago = _validationService.GetColumnIndex(hoja, "fecha_pago");
 
         if (idxTipo == -1 || idxCategoria == -1 || idxConcepto == -1 || idxMonto == -1 || idxFecha == -1)
         {
@@ -789,6 +863,38 @@ public class ExcelReaderService
                     continue;
                 }
 
+                // VALIDACIÓN: fecha_pago >= fecha_registro
+                DateTime? fechaPago = null;
+                if (idxFechaPago.HasValue)
+                {
+                    var fechaPagoRaw = fila.Cell(idxFechaPago.Value).Value;
+                    if (!string.IsNullOrWhiteSpace(fechaPagoRaw.ToString()))
+                    {
+                        try
+                        {
+                            fechaPago = _transformationService.ParseExcelDate(fechaPagoRaw);
+                            
+                            if (fechaPago.HasValue && fechaPago.Value < fecha.Value)
+                            {
+                                errores.Add(new ErrorValidacion
+                                {
+                                    Fila = numeroFila,
+                                    Columna = "fecha_pago",
+                                    Error = "No puede ser anterior a fecha_registro",
+                                    ValorEncontrado = fechaPago.Value.ToString("yyyy-MM-dd"),
+                                    Sugerencia = $"fecha_registro es {fecha.Value:yyyy-MM-dd}"
+                                });
+                                numeroFila++;
+                                continue;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning("Error parseando fecha_pago en fila {Fila}: {Error}", numeroFila, ex.Message);
+                        }
+                    }
+                }
+
                 var financiero = new FinancieroDTO
                 {
                     TipoDato = tipo,
@@ -796,6 +902,7 @@ public class ExcelReaderService
                     Concepto = concepto,
                     Monto = monto,
                     FechaRegistro = fecha.Value,
+                    FechaPago = fechaPago,
                     EmpresaId = empresaId,
                     FilaOrigen = numeroFila
                 };
