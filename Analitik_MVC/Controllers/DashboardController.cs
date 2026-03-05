@@ -26,11 +26,12 @@ public class DashboardController : ControllerBase
     /// </summary>
     [HttpGet("summary")]
     public async Task<IActionResult> GetDashboardSummary(
-        [FromQuery] Guid empresaId,
-        [FromQuery] string tipoFilter = "30d")
+        [FromQuery] string tipoFilter = "2y")
     {
         try
         {
+            Guid empresaId = Guid.Parse(User.FindFirst(ClaimTypes.Name)?.Value!); //este es el ide empresa
+
             // Validar empresa
             var empresaExists = await _context.Empresas.AnyAsync(e => e.Id == empresaId && e.Activa);
             if (!empresaExists)
@@ -45,7 +46,7 @@ public class DashboardController : ControllerBase
                 "7d" => fechaHasta.AddDays(-7),
                 "30d" => fechaHasta.AddDays(-30),
                 "90d" => fechaHasta.AddDays(-90),
-                "1y" => fechaHasta.AddYears(-1),
+                "2y" => fechaHasta.AddYears(-2),
                 _ => fechaHasta.AddDays(-30)
             };
 
@@ -69,17 +70,27 @@ public class DashboardController : ControllerBase
                 ? ((totalIngresos - ventasAnterior) / ventasAnterior) * 100
                 : 0;
 
-            // Ventas por mes (últimos 6 meses)
-            var ventasPorMes = await _context.Ventas
-                .Where(v => v.EmpresaId == empresaId && v.FechaVenta >= DateTime.UtcNow.AddMonths(-6))
+            var ventasPorMesData = await _context.Ventas
+                .Where(v => v.EmpresaId == empresaId &&
+                            v.FechaVenta >= DateTime.UtcNow.AddMonths(-6))
                 .GroupBy(v => new { v.FechaVenta.Year, v.FechaVenta.Month })
                 .Select(g => new
                 {
-                    mes = $"{g.Key.Year}-{g.Key.Month:D2}",
-                    ventas = g.Sum(v => v.MontoTotal)
+                    g.Key.Year,
+                    g.Key.Month,
+                    Ventas = g.Sum(v => v.MontoTotal)
                 })
-                .OrderBy(x => x.mes)
+                .OrderBy(x => x.Year)
+                .ThenBy(x => x.Month)
                 .ToListAsync();
+
+            var ventasPorMes = ventasPorMesData
+                .Select(x => new
+                {
+                    mes = $"{x.Year}-{x.Month:D2}",
+                    ventas = x.Ventas
+                })
+                .ToList();
 
             // Top 5 clientes
             var topClientes = await _context.Ventas
@@ -213,7 +224,6 @@ public class DashboardController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error al obtener resumen de dashboard para empresa {EmpresaId}", empresaId);
             return StatusCode(500, new { error = "Error interno del servidor", detalle = ex.Message });
         }
     }

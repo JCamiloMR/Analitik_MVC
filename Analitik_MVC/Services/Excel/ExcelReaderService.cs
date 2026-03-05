@@ -1,4 +1,4 @@
-using Analitik_MVC.DTOs.Import;
+ï»¿using Analitik_MVC.DTOs.Import;
 using Analitik_MVC.Services.Data;
 using ClosedXML.Excel;
 
@@ -14,9 +14,9 @@ public class ExcelReaderService
     private readonly DataTransformationService _transformationService;
     private readonly ExcelValidationService _validationService;
 
-    // Listas permitidas (hardcoded según especificación)
+    // Listas permitidas (hardcoded segÃºn especificaciÃ³n)
     private readonly string[] _unidadesMedidaPermitidas = { 
-        "unidad", "kg", "gramo", "metro", "centímetro", "litro", "mililitro", "caja", "docena" 
+        "unidad", "kg", "gramo", "metro", "centÃ­metro", "litro", "mililitro", "caja", "docena" 
     };
     
     private readonly string[] _categoriasPermitidas = { 
@@ -37,10 +37,10 @@ public class ExcelReaderService
 
     private readonly Dictionary<string, string[]> _categoriasFinancieras = new()
     {
-        ["ingreso"] = new[] { "ventas", "servicios", "retorno inversión", "intereses", "otros ingresos" },
+        ["ingreso"] = new[] { "ventas", "servicios", "retorno inversiÃ³n", "intereses", "otros ingresos" },
         ["gasto"] = new[] { "salarios", "servicios", "transporte", "marketing", "comisiones", "otros gastos" },
         ["costo"] = new[] { "costo bienes vendidos", "materia prima", "mano obra directa", "otros costos" },
-        ["inversion"] = new[] { "activos fijos", "mejoras", "tecnología", "otros" }
+        ["inversion"] = new[] { "activos fijos", "mejoras", "tecnologÃ­a", "otros" }
     };
 
     public ExcelReaderService(
@@ -64,7 +64,7 @@ public class ExcelReaderService
         var advertencias = new List<string>();
         var codigosVistos = new HashSet<string>();
 
-        // Obtener índices de columnas
+        // Obtener Ã­ndices de columnas
         var indices = ObtenerIndicesColumnasProductos(hoja);
         if (indices == null)
         {
@@ -94,15 +94,15 @@ public class ExcelReaderService
                 var requiereInventarioRaw = fila.Cell(indices.RequiereInventario).Value;
                 var activoRaw = fila.Cell(indices.Activo).Value;
 
-                // VALIDACIÓN: Campos obligatorios vacíos
+                // VALIDACIÃ“N: Campos obligatorios vacÃ­os
                 if (string.IsNullOrWhiteSpace(codigoProducto))
                 {
                     errores.Add(new ErrorValidacion
                     {
                         Fila = numeroFila,
                         Columna = "codigo_producto",
-                        Error = "Campo obligatorio vacío",
-                        Sugerencia = "Ingresa un código único (ej: PROD-001)"
+                        Error = "Campo obligatorio vacÃ­o",
+                        Sugerencia = "Ingresa un cÃ³digo Ãºnico (ej: PROD-001)"
                     });
                     numeroFila++;
                     continue;
@@ -114,24 +114,24 @@ public class ExcelReaderService
                     {
                         Fila = numeroFila,
                         Columna = "nombre",
-                        Error = "Campo obligatorio vacío",
+                        Error = "Campo obligatorio vacÃ­o",
                         Sugerencia = "Ingresa el nombre del producto"
                     });
                     numeroFila++;
                     continue;
                 }
 
-                // Normalizar código
+                // Normalizar cÃ³digo
                 codigoProducto = _transformationService.NormalizeCodigo(codigoProducto);
 
-                // VALIDACIÓN: Formato código
+                // VALIDACIÃ“N: Formato cÃ³digo
                 if (!_transformationService.ValidateCodigo(codigoProducto))
                 {
                     errores.Add(new ErrorValidacion
                     {
                         Fila = numeroFila,
                         Columna = "codigo_producto",
-                        Error = "Código debe ser alfanumérico, sin espacios, no iniciar con número",
+                        Error = "CÃ³digo debe ser alfanumÃ©rico, sin espacios, no iniciar con nÃºmero",
                         ValorEncontrado = codigoProducto,
                         Sugerencia = "Use formato: PROD-001, PANT001, etc."
                     });
@@ -139,16 +139,16 @@ public class ExcelReaderService
                     continue;
                 }
 
-                // VALIDACIÓN: Duplicados en carga
+                // VALIDACIÃ“N: Duplicados en carga
                 if (codigosVistos.Contains(codigoProducto))
                 {
                     errores.Add(new ErrorValidacion
                     {
                         Fila = numeroFila,
                         Columna = "codigo_producto",
-                        Error = $"Código duplicado: {codigoProducto}. Ya aparece en fila anterior",
+                        Error = $"CÃ³digo duplicado: {codigoProducto}. Ya aparece en fila anterior",
                         ValorEncontrado = codigoProducto,
-                        Sugerencia = "Cada código debe ser único"
+                        Sugerencia = "Cada cÃ³digo debe ser Ãºnico"
                     });
                     numeroFila++;
                     continue;
@@ -180,9 +180,9 @@ public class ExcelReaderService
                     {
                         Fila = numeroFila,
                         Columna = "precio_venta",
-                        Error = "Formato inválido",
+                        Error = "Formato invÃ¡lido",
                         ValorEncontrado = precioVentaRaw.ToString(),
-                        Sugerencia = "Use formato numérico (ej: 89500 o 89,500.00)",
+                        Sugerencia = "Use formato numÃ©rico (ej: 89500 o 89,500.00)",
                         TipoDatoEsperado = "decimal"
                     });
                     numeroFila++;
@@ -217,7 +217,7 @@ public class ExcelReaderService
                     }
                 }
 
-                // VALIDACIÓN: Unidad de medida
+                // VALIDACIÃ“N: Unidad de medida
                 unidadMedida = unidadMedida?.Trim().ToLower() ?? "";
                 if (!_unidadesMedidaPermitidas.Contains(unidadMedida))
                 {
@@ -245,7 +245,7 @@ public class ExcelReaderService
                     esServicio = _transformationService.ParseBoolean(esServicioRaw);
                 }
 
-                // VALIDACIÓN: Lógica es_servicio + requiere_inventario
+                // VALIDACIÃ“N: LÃ³gica es_servicio + requiere_inventario
                 if (esServicio && requiereInventario)
                 {
                     errores.Add(new ErrorValidacion
@@ -263,12 +263,12 @@ public class ExcelReaderService
                     ? fila.Cell(indices.Categoria.Value).GetString()?.Trim() 
                     : null;
                 
-                // Validar categoría (solo advertencia si no está en lista)
+                // Validar categorÃ­a (solo advertencia si no estÃ¡ en lista)
                 if (!string.IsNullOrWhiteSpace(categoria))
                 {
                     if (!_categoriasPermitidas.Contains(categoria.ToLower()))
                     {
-                        advertencias.Add($"Fila {numeroFila}: Categoría '{categoria}' no reconocida. Será registrada sin clasificación.");
+                        advertencias.Add($"Fila {numeroFila}: CategorÃ­a '{categoria}' no reconocida. SerÃ¡ registrada sin clasificaciÃ³n.");
                     }
                 }
 
@@ -353,7 +353,7 @@ public class ExcelReaderService
         }
     }
 
-    // Clase helper para índices de columnas de PRODUCTOS
+    // Clase helper para Ã­ndices de columnas de PRODUCTOS
     private class IndicesProductos
     {
         public int CodigoProducto { get; set; }
@@ -421,10 +421,10 @@ public class ExcelReaderService
         var errores = new List<ErrorValidacion>();
         var advertencias = new List<string>();
 
-        // Crear índice de códigos válidos
+        // Crear Ã­ndice de cÃ³digos vÃ¡lidos
         var codigosValidos = productosValidos.Select(p => p.CodigoProducto).ToHashSet();
 
-        // Obtener índices de columnas
+        // Obtener Ã­ndices de columnas
         var idxCodigo = _validationService.GetColumnIndex(hoja, "codigo_producto") ?? -1;
         var idxCantidad = _validationService.GetColumnIndex(hoja, "cantidad_disponible") ?? -1;
 
@@ -464,32 +464,32 @@ public class ExcelReaderService
                     {
                         Fila = numeroFila,
                         Columna = "codigo_producto",
-                        Error = "Campo obligatorio vacío"
+                        Error = "Campo obligatorio vacÃ­o"
                     });
                     numeroFila++;
                     continue;
                 }
 
-                // Validar que código existe en PRODUCTOS
+                // Validar que cÃ³digo existe en PRODUCTOS
                 if (!codigosValidos.Contains(codigo))
                 {
                     errores.Add(new ErrorValidacion
                     {
                         Fila = numeroFila,
                         Columna = "codigo_producto",
-                        Error = $"Código '{codigo}' no existe en hoja PRODUCTOS",
+                        Error = $"CÃ³digo '{codigo}' no existe en hoja PRODUCTOS",
                         ValorEncontrado = codigo,
-                        Sugerencia = "Verifica que el producto esté en hoja PRODUCTOS"
+                        Sugerencia = "Verifica que el producto estÃ© en hoja PRODUCTOS"
                     });
                     numeroFila++;
                     continue;
                 }
 
-                // VALIDACIÓN: Producto es servicio (no requiere inventario)
+                // VALIDACIÃ“N: Producto es servicio (no requiere inventario)
                 var producto = productosValidos.FirstOrDefault(p => p.CodigoProducto == codigo);
                 if (producto != null && !producto.RequiereInventario)
                 {
-                    advertencias.Add($"Fila {numeroFila}: Código '{codigo}' es un servicio (no requiere inventario). Línea omitida.");
+                    advertencias.Add($"Fila {numeroFila}: CÃ³digo '{codigo}' es un servicio (no requiere inventario). LÃ­nea omitida.");
                     numeroFila++;
                     continue;
                 }
@@ -586,7 +586,7 @@ public class ExcelReaderService
         var advertencias = new List<string>();
         var ordenesVistas = new HashSet<string>();
 
-        // Validar índices obligatorios
+        // Validar Ã­ndices obligatorios
         var idxOrden = _validationService.GetColumnIndex(hoja, "numero_orden") ?? -1;
         var idxFecha = _validationService.GetColumnIndex(hoja, "fecha_venta") ?? -1;
         var idxCliente = _validationService.GetColumnIndex(hoja, "cliente_nombre") ?? -1;
@@ -618,13 +618,12 @@ public class ExcelReaderService
                 var numeroOrden = _transformationService.NormalizeCodigo(fila.Cell(idxOrden).GetString());
                 var fechaRaw = fila.Cell(idxFecha).Value;
                 var cliente = fila.Cell(idxCliente).GetString();
-                var totalRaw = fila.Cell(idxTotal).Value;
                 var metodoPago = fila.Cell(idxMetodo).GetString()?.Trim().ToLower();
 
-                // Validaciones básicas
+                // Validaciones bÃ¡sicas
                 if (string.IsNullOrWhiteSpace(numeroOrden))
                 {
-                    errores.Add(new ErrorValidacion { Fila = numeroFila, Columna = "numero_orden", Error = "Campo obligatorio vacío" });
+                    errores.Add(new ErrorValidacion { Fila = numeroFila, Columna = "numero_orden", Error = "Campo obligatorio vacÃ­o" });
                     numeroFila++;
                     continue;
                 }
@@ -650,7 +649,7 @@ public class ExcelReaderService
                     {
                         Fila = numeroFila,
                         Columna = "fecha_venta",
-                        Error = "Fecha inválida",
+                        Error = "Fecha invÃ¡lida",
                         ValorEncontrado = fechaRaw.ToString()
                     });
                     numeroFila++;
@@ -685,66 +684,127 @@ public class ExcelReaderService
                     continue;
                 }
 
-                var montoTotal = _transformationService.ParseCurrency(totalRaw);
-                
-                // VALIDACIÓN: Coherencia de montos con tolerancia ±0.01
+                decimal montoTotal;
+
+                if (!fila.Cell(idxTotal).TryGetValue(out montoTotal))
+                {
+                    errores.Add(new ErrorValidacion
+                    {
+                        Fila = numeroFila,
+                        Columna = "monto_total",
+                        Error = "Monto invÃ¡lido",
+                        ValorEncontrado = fila.Cell(idxTotal).GetString()
+                    });
+                    numeroFila++;
+                    continue;
+                }
+
+                var cell = fila.Cell(idxTotal);
+
+                decimal montoSubtotal = 0m;
+                decimal montoDescuento = 0m;
+                decimal montoImpuestos = 0m;
+
+
+                // VALIDACIÃ“N: Coherencia de montos con tolerancia Â±0.01
                 if (idxSubtotal.HasValue && idxDescuento.HasValue && idxImpuestos.HasValue)
                 {
-                    var subtotalRaw = fila.Cell(idxSubtotal.Value).Value;
-                    var descuentoRaw = fila.Cell(idxDescuento.Value).Value;
-                    var impuestosRaw = fila.Cell(idxImpuestos.Value).Value;
-
-                    if (!string.IsNullOrWhiteSpace(subtotalRaw.ToString()))
+                    // Subtotal (opcional pero si viene debe ser vÃ¡lido)
+                    if (idxSubtotal.HasValue)
                     {
-                        try
+                        var cellSubtotal = fila.Cell(idxSubtotal.Value);
+                        if (!cellSubtotal.IsEmpty())
                         {
-                            var montoSubtotal = _transformationService.ParseCurrency(subtotalRaw);
-                            var montoDescuento = string.IsNullOrWhiteSpace(descuentoRaw.ToString()) 
-                                ? 0m 
-                                : _transformationService.ParseCurrency(descuentoRaw);
-                            var montoImpuestos = string.IsNullOrWhiteSpace(impuestosRaw.ToString()) 
-                                ? 0m 
-                                : _transformationService.ParseCurrency(impuestosRaw);
-
-                            // Calcular total esperado
-                            var totalCalculado = montoSubtotal - montoDescuento + montoImpuestos;
-                            var diferencia = Math.Abs(montoTotal - totalCalculado);
-
-                            // Tolerancia de 1 centavo (±0.01) para errores de redondeo
-                            if (diferencia > 0.01m)
+                            if (!cellSubtotal.TryGetValue(out montoSubtotal))
                             {
                                 errores.Add(new ErrorValidacion
                                 {
                                     Fila = numeroFila,
-                                    Columna = "monto_total",
-                                    Error = $"Total ({montoTotal:F2}) ? subtotal ({montoSubtotal:F2}) - descuento ({montoDescuento:F2}) + impuestos ({montoImpuestos:F2})",
-                                    ValorEncontrado = montoTotal.ToString("F2"),
-                                    Sugerencia = $"Esperado: {totalCalculado:F2} (tolerancia ±0.01 para redondeo)"
+                                    Columna = "monto_subtotal",
+                                    Error = "Subtotal invÃ¡lido",
+                                    ValorEncontrado = cellSubtotal.GetString()
                                 });
                                 numeroFila++;
                                 continue;
                             }
+                        }
+                    }
 
-                            // Validar descuento <= subtotal
-                            if (montoDescuento > montoSubtotal)
+                    // Descuento
+                    if (idxDescuento.HasValue)
+                    {
+                        var cellDescuento = fila.Cell(idxDescuento.Value);
+                        if (!cellDescuento.IsEmpty())
+                        {
+                            if (!cellDescuento.TryGetValue(out montoDescuento))
                             {
                                 errores.Add(new ErrorValidacion
                                 {
                                     Fila = numeroFila,
                                     Columna = "monto_descuento",
-                                    Error = "No puede ser mayor que monto_subtotal",
-                                    ValorEncontrado = $"{montoDescuento:F2} (subtotal: {montoSubtotal:F2})"
+                                    Error = "Descuento invÃ¡lido",
+                                    ValorEncontrado = cellDescuento.GetString()
                                 });
                                 numeroFila++;
                                 continue;
                             }
                         }
-                        catch (Exception ex)
+                    }
+
+                    // Impuestos
+                    if (idxImpuestos.HasValue)
+                    {
+                        var cellImpuestos = fila.Cell(idxImpuestos.Value);
+                        if (!cellImpuestos.IsEmpty())
                         {
-                            _logger.LogWarning("Error validando montos en fila {Fila}: {Error}", numeroFila, ex.Message);
-                            // Continuar sin rechazar la fila si hay error en validación de montos
+                            if (!cellImpuestos.TryGetValue(out montoImpuestos))
+                            {
+                                errores.Add(new ErrorValidacion
+                                {
+                                    Fila = numeroFila,
+                                    Columna = "monto_impuestos",
+                                    Error = "Impuestos invÃ¡lidos",
+                                    ValorEncontrado = cellImpuestos.GetString()
+                                });
+                                numeroFila++;
+                                continue;
+                            }
                         }
                     }
+
+                    // VALIDACIONES DE COHERENCIA
+                    var totalCalculado = montoSubtotal - montoDescuento + montoImpuestos;
+                    var diferencia = Math.Abs(montoTotal - totalCalculado);
+
+                    if (diferencia > 0.01m)
+                    {
+                        errores.Add(new ErrorValidacion
+                        {
+                            Fila = numeroFila,
+                            Columna = "monto_total",
+                            Error = $"Total ({montoTotal:F2}) â‰  subtotal ({montoSubtotal:F2}) - descuento ({montoDescuento:F2}) + impuestos ({montoImpuestos:F2})",
+                            ValorEncontrado = montoTotal.ToString("F2"),
+                            Sugerencia = $"Esperado: {totalCalculado:F2} (tolerancia Â±0.01)"
+                        });
+                        numeroFila++;
+                        continue;
+                    }
+
+                    // Validar descuento <= subtotal
+                    if (montoDescuento > montoSubtotal)
+                    {
+                        errores.Add(new ErrorValidacion
+                        {
+                            Fila = numeroFila,
+                            Columna = "monto_descuento",
+                            Error = "No puede ser mayor que monto_subtotal",
+                            ValorEncontrado = $"{montoDescuento:F2} (subtotal: {montoSubtotal:F2})"
+                        });
+                        numeroFila++;
+                        continue;
+                    }
+
+                
                 }
 
                 var fechaVentaUtc = DateTime.SpecifyKind(
@@ -752,12 +812,17 @@ public class ExcelReaderService
                     DateTimeKind.Utc
                 );
 
+
+
                 var venta = new VentaDTO
                 {
                     NumeroOrden = numeroOrden,
                     FechaVenta = fechaVentaUtc,
                     ClienteNombre = _transformationService.NormalizeText(cliente),
                     MontoTotal = montoTotal,
+                    MontoSubtotal = montoSubtotal,
+                    MontoDescuento = montoDescuento,
+                    MontoImpuestos = montoImpuestos,
                     MetodoPago = metodoPago,
                     EmpresaId = empresaId,
                     FilaOrigen = numeroFila
@@ -836,7 +901,7 @@ public class ExcelReaderService
 
                 if (string.IsNullOrWhiteSpace(categoria))
                 {
-                    errores.Add(new ErrorValidacion { Fila = numeroFila, Columna = "categoria", Error = "Campo obligatorio vacío" });
+                    errores.Add(new ErrorValidacion { Fila = numeroFila, Columna = "categoria", Error = "Campo obligatorio vacÃ­o" });
                     numeroFila++;
                     continue;
                 }
@@ -858,12 +923,12 @@ public class ExcelReaderService
                 var fecha = _transformationService.ParseExcelDate(fechaRaw);
                 if (!fecha.HasValue)
                 {
-                    errores.Add(new ErrorValidacion { Fila = numeroFila, Columna = "fecha_registro", Error = "Fecha inválida" });
+                    errores.Add(new ErrorValidacion { Fila = numeroFila, Columna = "fecha_registro", Error = "Fecha invÃ¡lida" });
                     numeroFila++;
                     continue;
                 }
 
-                // VALIDACIÓN: fecha_pago >= fecha_registro
+                // VALIDACIÃ“N: fecha_pago >= fecha_registro
                 DateTime? fechaPago = null;
                 if (idxFechaPago.HasValue)
                 {

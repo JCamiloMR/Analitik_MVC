@@ -57,8 +57,8 @@ public class ImportController : ControllerBase
     [RequestSizeLimit(10 * 1024 * 1024)] // 10 MB límite
     public async Task<IActionResult> ImportarExcel([FromForm] IFormFile archivo)
     {
-        Guid empresaId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
-        Guid id_empresa = Guid.Parse(User.FindFirst(ClaimTypes.Name)?.Value!);
+        Guid empresaId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!); //id de cuenta
+        Guid id_empresa = Guid.Parse(User.FindFirst(ClaimTypes.Name)?.Value!); //este es el ide empresa
         _logger.LogInformation($"Iniciando importación de Excel para empresa {empresaId}");
 
         if (archivo == null || archivo.Length == 0)
