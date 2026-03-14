@@ -266,28 +266,30 @@ public class DatabaseLoaderService
     /// </summary>
     private async Task<int> CargarVentas(List<VentaDTO> ventasDTO, Guid empresaId)
     {
-        int insertados = 0;
+        int procesados = 0;
 
+        // 1. Cargar ventas existentes de la empresa y crear diccionario por NumeroOrden
+        var ventasExistentes = await _dbContext.Ventas
+            .Where(v => v.EmpresaId == empresaId)
+            .ToListAsync();
+
+        var ventasExistentesMap = ventasExistentes
+            .ToDictionary(v => v.NumeroOrden.Trim().ToUpper(), v => v);
+
+        // 2. Trackear NumeroOrden que vienen en el Excel
+        var ordenesEnCarga = new HashSet<string>(
+            ventasDTO
+                .Select(v => (v.NumeroOrden ?? string.Empty).Trim().ToUpper())
+                .Where(o => !string.IsNullOrWhiteSpace(o))
+        );
+
+        // 3. Upsert (update si existe, insert si no existe)
         foreach (var dto in ventasDTO)
         {
-            // 1. Verificar si ya existe la venta
-            var existente = await _dbContext.Ventas
-                .AsNoTracking()
-                .FirstOrDefaultAsync(v =>
-                    v.NumeroOrden == dto.NumeroOrden &&
-                    v.EmpresaId == empresaId);
-
-            if (existente != null)
-            {
-                _logger.LogWarning(
-                    "Venta {NumeroOrden} ya existe para empresa {EmpresaId}, saltando...",
-                    dto.NumeroOrden,
-                    empresaId);
-
+            var numeroOrden = (dto.NumeroOrden ?? string.Empty).Trim().ToUpper();
+            if (string.IsNullOrWhiteSpace(numeroOrden))
                 continue;
-            }
 
-            // 2. Normalizar montos (CLAVE para el CHECK total_coherente)
             var subtotal = dto.MontoSubtotal;
             var descuento = dto.MontoDescuento ?? 0;
             var impuestos = dto.MontoImpuestos ?? 0;
@@ -306,52 +308,89 @@ public class DatabaseLoaderService
 
             var totalCalculado = subtotal - descuento + impuestos;
 
-            // 3. Normalizar fecha (PostgreSQL TIMESTAMPTZ → SIEMPRE UTC)
             var fechaVentaUtc =
                 dto.FechaVenta.Kind == DateTimeKind.Unspecified
                     ? DateTime.SpecifyKind(dto.FechaVenta, DateTimeKind.Utc)
                     : dto.FechaVenta.ToUniversalTime();
 
-            // 4. Crear entidad FINAL (coherente con DB)
-            var nuevaVenta = new Venta
+            if (ventasExistentesMap.TryGetValue(numeroOrden, out var existente))
             {
-                Id = Guid.NewGuid(),
-                EmpresaId = empresaId,
+                // UPDATE
+                existente.NumeroFactura = dto.NumeroFactura;
+                existente.FechaVenta = fechaVentaUtc;
+                existente.ClienteNombre = dto.ClienteNombre;
+                existente.ClienteDocumento = dto.ClienteDocumento;
+                existente.ClienteTelefono = dto.ClienteTelefono;
+                existente.ClienteEmail = dto.ClienteEmail;
+                existente.ClienteDireccion = dto.ClienteDireccion;
+                existente.MontoSubtotal = subtotal;
+                existente.MontoDescuento = descuento;
+                existente.MontoImpuestos = impuestos;
+                existente.MontoTotal = totalCalculado;
+                existente.MetodoPago = Enum.Parse<MetodoPago>(dto.MetodoPago, true);
+                existente.EstadoPago = dto.EstadoPago ?? "pendiente";
+                existente.Estado = Enum.Parse<EstadoVenta>(dto.Estado ?? "completado", true);
+                existente.Vendedor = dto.Vendedor;
+                existente.CanalVenta = dto.CanalVenta;
+                existente.Notas = dto.Notas;
+                existente.UpdatedAt = DateTime.UtcNow;
 
-                NumeroOrden = dto.NumeroOrden,
-                NumeroFactura = dto.NumeroFactura,
+                _dbContext.Ventas.Update(existente);
+            }
+            else
+            {
+                // INSERT
+                var nuevaVenta = new Venta
+                {
+                    Id = Guid.NewGuid(),
+                    EmpresaId = empresaId,
+                    NumeroOrden = numeroOrden,
+                    NumeroFactura = dto.NumeroFactura,
+                    FechaVenta = fechaVentaUtc,
+                    ClienteNombre = dto.ClienteNombre,
+                    ClienteDocumento = dto.ClienteDocumento,
+                    ClienteTelefono = dto.ClienteTelefono,
+                    ClienteEmail = dto.ClienteEmail,
+                    ClienteDireccion = dto.ClienteDireccion,
+                    MontoSubtotal = subtotal,
+                    MontoDescuento = descuento,
+                    MontoImpuestos = impuestos,
+                    MontoTotal = totalCalculado,
+                    MetodoPago = Enum.Parse<MetodoPago>(dto.MetodoPago, true),
+                    EstadoPago = dto.EstadoPago ?? "pendiente",
+                    Estado = Enum.Parse<EstadoVenta>(dto.Estado ?? "completado", true),
+                    Vendedor = dto.Vendedor,
+                    CanalVenta = dto.CanalVenta,
+                    Notas = dto.Notas,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
 
-                FechaVenta = fechaVentaUtc,
+                await _dbContext.Ventas.AddAsync(nuevaVenta);
+            }
 
-                ClienteNombre = dto.ClienteNombre,
-                ClienteDocumento = dto.ClienteDocumento,
-                ClienteTelefono = dto.ClienteTelefono,
-                ClienteEmail = dto.ClienteEmail,
-                ClienteDireccion = dto.ClienteDireccion,
-
-                MontoSubtotal = subtotal,
-                MontoDescuento = descuento,
-                MontoImpuestos = impuestos,
-                MontoTotal = totalCalculado,
-
-                MetodoPago = Enum.Parse<MetodoPago>(dto.MetodoPago, true),
-                EstadoPago = dto.EstadoPago ?? "pendiente",
-                Estado = Enum.Parse<EstadoVenta>(dto.Estado ?? "completado", true),
-
-                Vendedor = dto.Vendedor,
-                CanalVenta = dto.CanalVenta,
-                Notas = dto.Notas,
-
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            // 5. Insertar
-            await _dbContext.Ventas.AddAsync(nuevaVenta);
-            insertados++;
+            procesados++;
         }
 
-        return insertados;
+        // 4. Eliminar ventas que existen en BD pero no vienen en el nuevo Excel
+        var ventasAEliminar = ventasExistentes
+            .Where(v => !ordenesEnCarga.Contains(v.NumeroOrden.Trim().ToUpper()))
+            .ToList();
+
+        if (ventasAEliminar.Any())
+        {
+            var idsVentasAEliminar = ventasAEliminar.Select(v => v.Id).ToList();
+
+            // Eliminar primero detalles_venta para respetar FK
+            var detallesAEliminar = await _dbContext.DetallesVenta
+                .Where(d => idsVentasAEliminar.Contains(d.VentaId))
+                .ToListAsync();
+
+            _dbContext.DetallesVenta.RemoveRange(detallesAEliminar);
+            _dbContext.Ventas.RemoveRange(ventasAEliminar);
+        }
+
+        return procesados;
     }
 
 

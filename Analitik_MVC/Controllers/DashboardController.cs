@@ -26,11 +26,16 @@ public class DashboardController : ControllerBase
     /// </summary>
     [HttpGet("summary")]
     public async Task<IActionResult> GetDashboardSummary(
-        [FromQuery] string tipoFilter = "2y")
+        [FromQuery] string? timeFilter = null,
+        [FromQuery] string? tipoFilter = null)
     {
         try
         {
             Guid empresaId = Guid.Parse(User.FindFirst(ClaimTypes.Name)?.Value!); //este es el ide empresa
+
+            var filtroTiempo = string.IsNullOrWhiteSpace(timeFilter)
+                ? (string.IsNullOrWhiteSpace(tipoFilter) ? "30d" : tipoFilter)
+                : timeFilter;
 
             // Validar empresa
             var empresaExists = await _context.Empresas.AnyAsync(e => e.Id == empresaId && e.Activa);
@@ -41,11 +46,12 @@ public class DashboardController : ControllerBase
 
             // Calcular rango de fechas según filtro
             var fechaHasta = DateTime.UtcNow;
-            var fechaDesde = tipoFilter switch
+            var fechaDesde = filtroTiempo switch
             {
                 "7d" => fechaHasta.AddDays(-7),
                 "30d" => fechaHasta.AddDays(-30),
                 "90d" => fechaHasta.AddDays(-90),
+                "1y" => fechaHasta.AddYears(-1),
                 "2y" => fechaHasta.AddYears(-2),
                 _ => fechaHasta.AddDays(-30)
             };
@@ -72,7 +78,8 @@ public class DashboardController : ControllerBase
 
             var ventasPorMesData = await _context.Ventas
                 .Where(v => v.EmpresaId == empresaId &&
-                            v.FechaVenta >= DateTime.UtcNow.AddMonths(-6))
+                            v.FechaVenta >= fechaDesde &&
+                            v.FechaVenta <= fechaHasta)
                 .GroupBy(v => new { v.FechaVenta.Year, v.FechaVenta.Month })
                 .Select(g => new
                 {
@@ -151,14 +158,19 @@ public class DashboardController : ControllerBase
 
             // Flujo de caja por mes
             var flujoCajaPorMes = await _context.DatosFinancieros
-                .Where(f => f.EmpresaId == empresaId && f.Anio == DateTime.UtcNow.Year)
-                .GroupBy(f => new { f.Mes, f.TipoDato })
+                .Where(f => f.EmpresaId == empresaId &&
+                            f.FechaRegistro >= DateOnly.FromDateTime(fechaDesde) &&
+                            f.FechaRegistro <= DateOnly.FromDateTime(fechaHasta))
+                .GroupBy(f => new { f.Anio, f.Mes, f.TipoDato })
                 .Select(g => new
                 {
+                    anio = g.Key.Anio,
                     mes = g.Key.Mes,
                     tipo = g.Key.TipoDato,
                     monto = g.Sum(f => f.Monto)
                 })
+                .OrderBy(x => x.anio)
+                .ThenBy(x => x.mes)
                 .ToListAsync();
 
             // ===== OPERACIONES =====
@@ -215,7 +227,7 @@ public class DashboardController : ControllerBase
                     empresaId = empresaId,
                     fechaDesde = fechaDesde,
                     fechaHasta = fechaHasta,
-                    filtroAplicado = tipoFilter,
+                    filtroAplicado = filtroTiempo,
                     ultimaActualizacion = DateTime.UtcNow
                 }
             };
