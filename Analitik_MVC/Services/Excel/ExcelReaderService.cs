@@ -410,7 +410,8 @@ public class ExcelReaderService
         return indices;
     }
 
-    /// <summary>
+    /// <
+    /// >
     /// Lee y mapea hoja INVENTARIO
     /// </summary>
     public (List<InventarioDTO> Inventarios, ValidationResult Validacion) LeerYMapearInventario(
@@ -861,8 +862,9 @@ public class ExcelReaderService
         var idxMonto = _validationService.GetColumnIndex(hoja, "monto") ?? -1;
         var idxFecha = _validationService.GetColumnIndex(hoja, "fecha_registro") ?? -1;
         var idxFechaPago = _validationService.GetColumnIndex(hoja, "fecha_pago");
+        var idxComprobante = _validationService.GetColumnIndex(hoja, "numero_comprobante") ?? -1;
 
-        if (idxTipo == -1 || idxCategoria == -1 || idxConcepto == -1 || idxMonto == -1 || idxFecha == -1)
+        if (idxTipo == -1 || idxCategoria == -1 || idxConcepto == -1 || idxMonto == -1 || idxFecha == -1 || idxComprobante == -1)
         {
             errores.Add(new ErrorValidacion
             {
@@ -960,6 +962,20 @@ public class ExcelReaderService
                     }
                 }
 
+                var numeroComprobante = fila.Cell(idxComprobante).GetString()?.Trim();
+
+                if (string.IsNullOrWhiteSpace(numeroComprobante))
+                {
+                    errores.Add(new ErrorValidacion
+                    {
+                        Fila = numeroFila,
+                        Columna = "numero_comprobante",
+                        Error = "Campo obligatorio vacío"
+                    });
+                    numeroFila++;
+                    continue;
+                }
+
                 var financiero = new FinancieroDTO
                 {
                     TipoDato = tipo,
@@ -968,6 +984,7 @@ public class ExcelReaderService
                     Monto = monto,
                     FechaRegistro = fecha.Value,
                     FechaPago = fechaPago,
+                    NumeroComprobante = numeroComprobante, // 👈 NUEVO
                     EmpresaId = empresaId,
                     FilaOrigen = numeroFila
                 };

@@ -26,16 +26,13 @@ public class DashboardController : ControllerBase
     /// </summary>
     [HttpGet("summary")]
     public async Task<IActionResult> GetDashboardSummary(
-        [FromQuery] string? timeFilter = null,
         [FromQuery] string? tipoFilter = null)
     {
         try
         {
             Guid empresaId = Guid.Parse(User.FindFirst(ClaimTypes.Name)?.Value!); //este es el ide empresa
 
-            var filtroTiempo = string.IsNullOrWhiteSpace(timeFilter)
-                ? (string.IsNullOrWhiteSpace(tipoFilter) ? "30d" : tipoFilter)
-                : timeFilter;
+            var filtroTiempo = tipoFilter;
 
             // Validar empresa
             var empresaExists = await _context.Empresas.AnyAsync(e => e.Id == empresaId && e.Activa);

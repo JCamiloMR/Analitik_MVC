@@ -66,7 +66,8 @@ public class DatabaseLoaderService
             if (financieros.Any())
             {
                 _logger.LogInformation("Cargando {Count} datos financieros...", financieros.Count);
-                resumen.FinancierosInsertados = await CargarFinancieros(financieros, empresaId);
+                var(insertadosF, actualizadosF) = await CargarFinancieros(financieros, empresaId);
+                resumen.FinancierosInsertados = insertadosF;
             }
 
             // COMMIT si todo OK
@@ -394,44 +395,96 @@ public class DatabaseLoaderService
     }
 
 
+    private string CrearKeyFinanciero(string tipo, string categoria, string concepto, DateTime fecha)
+    {
+        return $"{tipo?.Trim().ToLower()}|" +
+               $"{categoria?.Trim().ToLower()}|" +
+               $"{concepto?.Trim().ToLower()}|" +
+               $"{fecha.Date:yyyyMMdd}";
+    }
+
     /// <summary>
     /// Carga datos financieros
     /// </summary>
-    private async Task<int> CargarFinancieros(List<FinancieroDTO> financierosDTO, Guid empresaId)
+    private async Task<(int insertadosF, int actualizadosF)> CargarFinancieros(
+    List<FinancieroDTO> financierosDTO, Guid empresaId)
     {
-        int insertados = 0;
+        int insertadosF = 0;
+        int actualizadosF = 0;
+
+        // 🔑 Obtener comprobantes válidos del Excel
+        var comprobantes = financierosDTO
+            .Where(x => !string.IsNullOrWhiteSpace(x.NumeroComprobante))
+            .Select(x => x.NumeroComprobante.Trim())
+            .Distinct()
+            .ToList();
+
+        // 🔍 Traer existentes por comprobante
+        var existentes = await _dbContext.DatosFinancieros
+            .Where(f => f.EmpresaId == empresaId && comprobantes.Contains(f.NumeroComprobante))
+            .ToDictionaryAsync(f => f.NumeroComprobante);
 
         foreach (var dto in financierosDTO)
         {
-            var nuevoFinanciero = new DatosFinanciero
-            {
-                Id = Guid.NewGuid(),
-                EmpresaId = empresaId,
-                TipoDato = Enum.Parse<TipoDatoFinanciero>(dto.TipoDato, true),
-                Categoria = dto.Categoria,
-                Subcategoria = dto.Subcategoria,
-                Concepto = dto.Concepto,
-                Observaciones = dto.Observaciones,
-                Monto = dto.Monto,
-                Moneda = dto.Moneda ?? "COP",
-                FechaRegistro = DateOnly.FromDateTime(dto.FechaRegistro),
-                FechaPago = dto.FechaPago.HasValue 
-                    ? DateOnly.FromDateTime(dto.FechaPago.Value) 
-                    : null,
-                NumeroComprobante = dto.NumeroComprobante,
-                Beneficiario = dto.Beneficiario,
-                Periodo = Periodo.Mensual, // Por defecto
-                Anio = dto.FechaRegistro.Year,
-                Mes = dto.FechaRegistro.Month,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
+            var comprobante = dto.NumeroComprobante?.Trim();
 
-            await _dbContext.DatosFinancieros.AddAsync(nuevoFinanciero);
-            insertados++;
+            if (!string.IsNullOrWhiteSpace(comprobante) &&
+                existentes.TryGetValue(comprobante, out var existente))
+            {
+                // 🔄 UPDATE
+                existente.TipoDato = Enum.Parse<TipoDatoFinanciero>(dto.TipoDato, true);
+                existente.Categoria = dto.Categoria;
+                existente.Subcategoria = dto.Subcategoria;
+                existente.Concepto = dto.Concepto;
+                existente.Observaciones = dto.Observaciones;
+                existente.Monto = dto.Monto;
+                existente.Moneda = dto.Moneda ?? "COP";
+                existente.FechaRegistro = DateOnly.FromDateTime(dto.FechaRegistro);
+                existente.FechaPago = dto.FechaPago.HasValue
+                    ? DateOnly.FromDateTime(dto.FechaPago.Value)
+                    : null;
+                existente.NumeroComprobante = comprobante;
+                existente.Beneficiario = dto.Beneficiario;
+                existente.Anio = dto.FechaRegistro.Year;
+                existente.Mes = dto.FechaRegistro.Month;
+                existente.UpdatedAt = DateTime.UtcNow;
+
+                _dbContext.DatosFinancieros.Update(existente);
+                actualizadosF++;
+            }
+            else
+            {
+                // 🆕 INSERT
+                var nuevo = new DatosFinanciero
+                {
+                    Id = Guid.NewGuid(),
+                    EmpresaId = empresaId,
+                    TipoDato = Enum.Parse<TipoDatoFinanciero>(dto.TipoDato, true),
+                    Categoria = dto.Categoria,
+                    Subcategoria = dto.Subcategoria,
+                    Concepto = dto.Concepto,
+                    Observaciones = dto.Observaciones,
+                    Monto = dto.Monto,
+                    Moneda = dto.Moneda ?? "COP",
+                    FechaRegistro = DateOnly.FromDateTime(dto.FechaRegistro),
+                    FechaPago = dto.FechaPago.HasValue
+                        ? DateOnly.FromDateTime(dto.FechaPago.Value)
+                        : null,
+                    NumeroComprobante = comprobante,
+                    Beneficiario = dto.Beneficiario,
+                    Periodo = Periodo.Mensual,
+                    Anio = dto.FechaRegistro.Year,
+                    Mes = dto.FechaRegistro.Month,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                await _dbContext.DatosFinancieros.AddAsync(nuevo);
+                insertadosF++;
+            }
         }
 
-        return insertados;
+        return (insertadosF, actualizadosF);
     }
 
     /// <summary>
