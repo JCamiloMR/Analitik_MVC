@@ -88,14 +88,12 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
     }, []);
 
     useEffect(() => {
-        if (!empresaId) return;
-
         const fetchDashboard = async () => {
             try {
                 setIsLoading(true);
                 setError(null);
 
-                const response = await getDashboardSummary(empresaId, timeFilter);
+                const response = await getDashboardSummary(timeFilter);
                 setData(response);
 
             } catch (err) {
@@ -106,7 +104,7 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
         };
 
         fetchDashboard();
-    }, [empresaId, timeFilter]);
+    }, [timeFilter]);
 
 
     // ==================== VENTAS DATA ====================
@@ -422,6 +420,28 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
             default: return 'Panel de Control';
         }
     };
+
+    const flujoCajaTransformado = (data?.financieros.flujoCajaPorMes ?? []).reduce((acc, item) => {
+        const key = `${item.anio}-${item.mes}`;
+
+        if (!acc[key]) {
+            acc[key] = {
+                month: `${item.mes}/${item.anio}`,
+                entradas: 0,
+                salidas: 0
+            };
+        }
+
+        if (item.tipo === 0) {
+            acc[key].entradas += item.monto;
+        } else {
+            acc[key].salidas += item.monto;
+        }
+
+        return acc;
+    }, {});
+
+    const flujoCajaArray = Object.values(flujoCajaTransformado);
 
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('es-CO', {
@@ -1017,7 +1037,7 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                         </CardHeader>
                                         <CardContent>
                                             <ResponsiveContainer width="100%" height={300}>
-                                                <BarChart data={data?.financieros.flujoCaja ?? []}>
+                                                <BarChart data={flujoCajaArray}>
                                                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                                                     <XAxis dataKey="month" stroke="#E5E7EB" />
                                                     <YAxis stroke="#E5E7EB" tickFormatter={(value) => `$${value / 1000}K`} />

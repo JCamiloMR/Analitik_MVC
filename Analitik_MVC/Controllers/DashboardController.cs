@@ -161,13 +161,11 @@ public class DashboardController : ControllerBase
                 .GroupBy(f => new { f.Anio, f.Mes, f.TipoDato })
                 .Select(g => new
                 {
-                    anio = g.Key.Anio,
                     mes = g.Key.Mes,
                     tipo = g.Key.TipoDato,
                     monto = g.Sum(f => f.Monto)
                 })
-                .OrderBy(x => x.anio)
-                .ThenBy(x => x.mes)
+                .OrderBy(x => x.mes)
                 .ToListAsync();
 
             // ===== OPERACIONES =====
