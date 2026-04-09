@@ -18,6 +18,7 @@ import {
     ResponsiveContainer,
     BarChart,
     Bar,
+    Cell,
     ComposedChart,
     Legend,
     ReferenceLine,
@@ -88,12 +89,16 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
     }, []);
 
     useEffect(() => {
+        if (!empresaId) {
+            return;
+        }
+
         const fetchDashboard = async () => {
             try {
                 setIsLoading(true);
                 setError(null);
 
-                const response = await getDashboardSummary(timeFilter);
+                const response = await getDashboardSummary(empresaId, timeFilter);
                 setData(response);
 
             } catch (err) {
@@ -104,7 +109,7 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
         };
 
         fetchDashboard();
-    }, [timeFilter]);
+    }, [empresaId, timeFilter]);
 
 
     // ==================== VENTAS DATA ====================
@@ -421,18 +426,40 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
         }
     };
 
-    const flujoCajaTransformado = (data?.financieros.flujoCajaPorMes ?? []).reduce((acc, item) => {
-        const key = `${item.anio}-${item.mes}`;
+    const PlaceholderSinDatos = ({ mensaje = 'Sin datos disponibles para este período' }: { mensaje?: string }) => (
+        <div className="h-[300px] flex items-center justify-center text-sm text-slate-600 dark:text-[#E5E7EB]">
+            {mensaje}
+        </div>
+    );
+
+    const ventasPorMesData = data?.ventas.ventasPorMes ?? [];
+    const topClientesData = data?.ventas.topClientes ?? [];
+    const ventasPorCategoriaData = data?.ventas.ventasPorCategoria ?? [];
+    const pedidosRecientesData = data?.ventas.pedidosRecientes ?? [];
+    const inventarioPorCategoriaData = data?.inventario.inventarioPorCategoria ?? [];
+    const inventarioMovimientosData = data?.inventario.movimientos ?? [];
+    const inventarioRotacionData = data?.inventario.rotacion ?? [];
+    const margenMensualData = data?.operaciones.margenMensual ?? [];
+    const eficienciaTurnoData = data?.operaciones.eficienciaTurno ?? [];
+    const desperdicioData = data?.operaciones.desperdicio ?? [];
+    const tiemposEtapaData = data?.operaciones.tiemposEtapa ?? [];
+    const distribucionGastosData = data?.financieros.distribucionGastos ?? [];
+    const rentabilidadHistoricaData = data?.financieros.rentabilidadHistorica ?? [];
+    const proyeccionData = data?.financieros.proyeccion ?? [];
+
+    const flujoCajaTransformado = (data?.financieros.flujoCajaPorMes ?? []).reduce<Record<string, { month: string; entradas: number; salidas: number }>>((acc, item) => {
+        const anio = item.anio ?? new Date().getFullYear();
+        const key = `${anio}-${item.mes}`;
 
         if (!acc[key]) {
             acc[key] = {
-                month: `${item.mes}/${item.anio}`,
+                month: `${item.mes}/${anio}`,
                 entradas: 0,
                 salidas: 0
             };
         }
 
-        if (item.tipo === 0) {
+        if (Number(item.tipo) === 0) {
             acc[key].entradas += item.monto;
         } else {
             acc[key].salidas += item.monto;
@@ -615,17 +642,21 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                             <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Ventas mensuales con proyección futura</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <LineChart data={data?.ventas.ventasPorMes ?? []}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                    <XAxis dataKey="mes" stroke={axisColor} />
-                                                    <YAxis stroke={axisColor} tickFormatter={(value) => `$${value / 1000}K`} />
-                                                    <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `$${value.toLocaleString()} COP`} />} />
-                                                    <Legend />
-                                                    <Line type="monotone" dataKey="ventas" stroke="#2563eb" strokeWidth={3} name="Ventas" dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }} connectNulls={false} />
-                                                    <Line type="monotone" dataKey="proyectado" stroke="#FACC15" strokeWidth={3} strokeDasharray="5 5" name="Proyección" dot={{ fill: '#FACC15', strokeWidth: 2, r: 4 }} connectNulls={false} />
-                                                </LineChart>
-                                            </ResponsiveContainer>
+                                            {ventasPorMesData.length === 0 ? (
+                                                <PlaceholderSinDatos />
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <LineChart data={ventasPorMesData}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                                        <XAxis dataKey="mes" stroke={axisColor} />
+                                                        <YAxis stroke={axisColor} tickFormatter={(value) => `$${value / 1000}K`} />
+                                                        <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `$${value.toLocaleString()} COP`} />} />
+                                                        <Legend />
+                                                        <Line type="monotone" dataKey="ventas" stroke="#2563eb" strokeWidth={3} name="Ventas" dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }} connectNulls={false} />
+                                                        <Line type="monotone" dataKey="proyectado" stroke="#FACC15" strokeWidth={3} strokeDasharray="5 5" name="Proyección" dot={{ fill: '#FACC15', strokeWidth: 2, r: 4 }} connectNulls={false} />
+                                                    </LineChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </motion.div>
@@ -642,15 +673,19 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                             <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Clientes con mayores compras del periodo</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <BarChart data={data?.ventas.topClientes ?? []} layout="vertical">
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                    <XAxis type="number" stroke={axisColor} tickFormatter={(value) => `$${value / 1000}K`} />
-                                                    <YAxis dataKey="cliente" type="category" width={130} stroke={axisColor} />
-                                                    <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `$${value.toLocaleString()} COP`} />} />
-                                                    <Bar dataKey="ventas" fill="#2563eb" name="Ventas" radius={[0, 4, 4, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
+                                            {topClientesData.length === 0 ? (
+                                                <PlaceholderSinDatos />
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <BarChart data={topClientesData} layout="vertical">
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                                        <XAxis type="number" stroke={axisColor} tickFormatter={(value) => `$${value / 1000}K`} />
+                                                        <YAxis dataKey="cliente" type="category" width={130} stroke={axisColor} />
+                                                        <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `$${value.toLocaleString()} COP`} />} />
+                                                        <Bar dataKey="ventas" fill="#2563eb" name="Ventas" radius={[0, 4, 4, 0]} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </motion.div>
@@ -667,15 +702,19 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                             <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Distribución de ventas por tipo de producto</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <BarChart data={data?.ventas.ventasPorCategoria ?? []}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                    <XAxis dataKey="category" stroke={axisColor} />
-                                                    <YAxis stroke={axisColor} tickFormatter={(value) => `$${value / 1000}K`} />
-                                                    <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `$${value.toLocaleString()} COP`} />} />
-                                                    <Bar dataKey="ventas" fill="#3B82F6" name="Ventas" radius={[4, 4, 0, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
+                                            {ventasPorCategoriaData.length === 0 ? (
+                                                <PlaceholderSinDatos />
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <BarChart data={ventasPorCategoriaData}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                                        <XAxis dataKey="categoria" stroke={axisColor} />
+                                                        <YAxis stroke={axisColor} tickFormatter={(value) => `$${value / 1000}K`} />
+                                                        <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `$${value.toLocaleString()} COP`} />} />
+                                                        <Bar dataKey="ventas" fill="#3B82F6" name="Ventas" radius={[4, 4, 0, 0]} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </motion.div>
@@ -704,7 +743,14 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {data?.ventas.pedidosRecientes?.map((order, index) => (
+                                                        {pedidosRecientesData.length === 0 && (
+                                                            <tr>
+                                                                <td colSpan={5} className="py-6 text-center text-sm text-slate-600 dark:text-[#E5E7EB]">
+                                                                    Sin datos disponibles para este período
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                        {pedidosRecientesData.map((order, index) => (
                                                             <tr key={index} className="border-b border-slate-100 dark:border-[#374151] hover:bg-slate-50 dark:hover:bg-[#334155] transition-colors duration-150">
                                                                 <td className="py-2 px-2 text-sm text-blue-600 dark:text-[#60A5FA] font-medium">{order.id}</td>
                                                                 <td className="py-2 px-2 text-sm text-slate-900 dark:text-[#F1F5F9]">{order.cliente}</td>
@@ -765,23 +811,26 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                             <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Niveles de stock con indicadores de semáforo</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <BarChart data={data?.inventario.inventarioPorCategoria ?? []}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                    <XAxis dataKey="category" stroke={axisColor} />
-                                                    <YAxis stroke={axisColor} />
-                                                    <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value} unidades`} />} />
-                                                    <Bar dataKey="nivel" name="Nivel" radius={[4, 4, 0, 0]}>
-                                                        {data?.inventario.inventarioPorCategoria?.map((entry: any, index: number) => (
-                                                            <Bar
-                                                                key={`cell-${index}`}
-                                                                dataKey="nivel"
-                                                                fill={entry.status === 'high' ? '#EF4444' : entry.status === 'low' ? '#22C55E' : '#3B82F6'}
-                                                            />
-                                                        ))}
-                                                    </Bar>
-                                                </BarChart>
-                                            </ResponsiveContainer>
+                                            {inventarioPorCategoriaData.length === 0 ? (
+                                                <PlaceholderSinDatos />
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <BarChart data={inventarioPorCategoriaData}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                                        <XAxis dataKey="categoria" stroke={axisColor} />
+                                                        <YAxis stroke={axisColor} />
+                                                        <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value} unidades`} />} />
+                                                        <Bar dataKey="nivel" name="Nivel" radius={[4, 4, 0, 0]}>
+                                                            {inventarioPorCategoriaData.map((entry: any, index: number) => (
+                                                                <Cell
+                                                                    key={`cell-${index}`}
+                                                                    fill={entry.status === 'high' ? '#EF4444' : entry.status === 'low' ? '#22C55E' : '#3B82F6'}
+                                                                />
+                                                            ))}
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </motion.div>
@@ -840,17 +889,21 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                             <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Entradas y salidas de inventario por mes</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <BarChart data={data?.inventario.movimientos ?? []}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                    <XAxis dataKey="month" stroke={axisColor} />
-                                                    <YAxis stroke={axisColor} />
-                                                    <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value} unidades`} />} />
-                                                    <Legend />
-                                                    <Bar dataKey="entradas" fill="#22C55E" name="Entradas" radius={[4, 4, 0, 0]} />
-                                                    <Bar dataKey="salidas" fill="#EF4444" name="Salidas" radius={[4, 4, 0, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
+                                            {inventarioMovimientosData.length === 0 ? (
+                                                <PlaceholderSinDatos />
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <BarChart data={inventarioMovimientosData}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                                        <XAxis dataKey="month" stroke={axisColor} />
+                                                        <YAxis stroke={axisColor} />
+                                                        <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value} unidades`} />} />
+                                                        <Legend />
+                                                        <Bar dataKey="entradas" fill="#22C55E" name="Entradas" radius={[4, 4, 0, 0]} />
+                                                        <Bar dataKey="salidas" fill="#EF4444" name="Salidas" radius={[4, 4, 0, 0]} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </motion.div>
@@ -867,19 +920,23 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                             <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Comparación de productos con mejor y peor rotación</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <BarChart data={data?.inventario.rotacion ?? []} layout="vertical">
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                    <XAxis type="number" stroke={axisColor} />
-                                                    <YAxis dataKey="producto" type="category" width={120} stroke={axisColor} />
-                                                    <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value}x rotación`} />} />
-                                                    <Bar dataKey="rotacion" name="Rotación" radius={[0, 4, 4, 0]}>
-                                                        {data?.inventario.rotacion?.map((entry: any, index: number) => (
-                                                            <Bar key={`cell-${index}`} dataKey="rotacion" fill={entry.type === 'top' ? '#22C55E' : '#EF4444'} />
-                                                        ))}
-                                                    </Bar>
-                                                </BarChart>
-                                            </ResponsiveContainer>
+                                            {inventarioRotacionData.length === 0 ? (
+                                                <PlaceholderSinDatos />
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <BarChart data={inventarioRotacionData} layout="vertical">
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                                        <XAxis type="number" stroke={axisColor} />
+                                                        <YAxis dataKey="producto" type="category" width={120} stroke={axisColor} />
+                                                        <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value}x rotación`} />} />
+                                                        <Bar dataKey="rotacion" name="Rotación" radius={[0, 4, 4, 0]}>
+                                                            {inventarioRotacionData.map((entry: any, index: number) => (
+                                                                <Cell key={`cell-${index}`} fill={entry.type === 'top' ? '#22C55E' : '#EF4444'} />
+                                                            ))}
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </motion.div>
@@ -916,15 +973,19 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                             <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Tendencia del margen promedio por mes</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <LineChart data={data?.operaciones.margenMensual ?? []}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                    <XAxis dataKey="month" stroke={axisColor} />
-                                                    <YAxis stroke={axisColor} tickFormatter={(value) => `${value}%`} />
-                                                    <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value}%`} />} />
-                                                    <Line type="monotone" dataKey="margen" stroke="#2563eb" strokeWidth={3} name="Margen Promedio" dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }} />
-                                                </LineChart>
-                                            </ResponsiveContainer>
+                                            {margenMensualData.length === 0 ? (
+                                                <PlaceholderSinDatos />
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <LineChart data={margenMensualData}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                                        <XAxis dataKey="month" stroke={axisColor} />
+                                                        <YAxis stroke={axisColor} tickFormatter={(value) => `${value}%`} />
+                                                        <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value}%`} />} />
+                                                        <Line type="monotone" dataKey="margen" stroke="#2563eb" strokeWidth={3} name="Margen Promedio" dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }} />
+                                                    </LineChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </motion.div>
@@ -941,15 +1002,19 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                             <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Eficiencia operativa por turno de trabajo</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <BarChart data={data?.operaciones.eficienciaTurno ?? []}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                    <XAxis dataKey="turno" stroke={axisColor} />
-                                                    <YAxis stroke={axisColor} tickFormatter={(value) => `${value}%`} />
-                                                    <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value}%`} />} />
-                                                    <Bar dataKey="eficiencia" fill="#3B82F6" name="Eficiencia" radius={[4, 4, 0, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
+                                            {eficienciaTurnoData.length === 0 ? (
+                                                <PlaceholderSinDatos />
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <BarChart data={eficienciaTurnoData}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                                        <XAxis dataKey="turno" stroke={axisColor} />
+                                                        <YAxis stroke={axisColor} tickFormatter={(value) => `${value}%`} />
+                                                        <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value}%`} />} />
+                                                        <Bar dataKey="eficiencia" fill="#3B82F6" name="Eficiencia" radius={[4, 4, 0, 0]} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </motion.div>
@@ -966,15 +1031,19 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                             <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Desperdicios por material con valor monetario</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <BarChart data={data?.operaciones.desperdicio ?? []} layout="vertical">
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                    <XAxis type="number" stroke={axisColor} tickFormatter={(value) => `$${value / 1000}K`} />
-                                                    <YAxis dataKey="material" type="category" width={100} stroke={axisColor} />
-                                                    <RechartsTooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
-                                                    <Bar dataKey="desperdicio" fill="#EF4444" name="Desperdicio" radius={[0, 4, 4, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
+                                            {desperdicioData.length === 0 ? (
+                                                <PlaceholderSinDatos />
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <BarChart data={desperdicioData} layout="vertical">
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                                        <XAxis type="number" stroke={axisColor} tickFormatter={(value) => `$${value / 1000}K`} />
+                                                        <YAxis dataKey="material" type="category" width={100} stroke={axisColor} />
+                                                        <RechartsTooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
+                                                        <Bar dataKey="desperdicio" fill="#EF4444" name="Desperdicio" radius={[0, 4, 4, 0]} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </motion.div>
@@ -991,15 +1060,19 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                             <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Tiempo promedio en cada etapa operativa</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <BarChart data={data?.operaciones.tiemposEtapa ?? []}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                    <XAxis dataKey="etapa" stroke="#E5E7EB" />
-                                                    <YAxis stroke="#E5E7EB" tickFormatter={(value) => `${value}d`} />
-                                                    <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value} días`} />} />
-                                                    <Bar dataKey="tiempo" fill="#3B82F6" name="Tiempo" radius={[4, 4, 0, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
+                                            {tiemposEtapaData.length === 0 ? (
+                                                <PlaceholderSinDatos />
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <BarChart data={tiemposEtapaData}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                                        <XAxis dataKey="etapa" stroke="#E5E7EB" />
+                                                        <YAxis stroke="#E5E7EB" tickFormatter={(value) => `${value}d`} />
+                                                        <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value} días`} />} />
+                                                        <Bar dataKey="tiempo" fill="#3B82F6" name="Tiempo" radius={[4, 4, 0, 0]} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </motion.div>
@@ -1036,17 +1109,21 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                             <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Comparación de entradas y salidas de efectivo</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <BarChart data={flujoCajaArray}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                    <XAxis dataKey="month" stroke="#E5E7EB" />
-                                                    <YAxis stroke="#E5E7EB" tickFormatter={(value) => `$${value / 1000}K`} />
-                                                    <RechartsTooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
-                                                    <Legend />
-                                                    <Bar dataKey="entradas" fill="#22C55E" name="Entradas" radius={[4, 4, 0, 0]} />
-                                                    <Bar dataKey="salidas" fill="#EF4444" name="Salidas" radius={[4, 4, 0, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
+                                            {flujoCajaArray.length === 0 ? (
+                                                <PlaceholderSinDatos />
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <BarChart data={flujoCajaArray}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                                        <XAxis dataKey="month" stroke="#E5E7EB" />
+                                                        <YAxis stroke="#E5E7EB" tickFormatter={(value) => `$${value / 1000}K`} />
+                                                        <RechartsTooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
+                                                        <Legend />
+                                                        <Bar dataKey="entradas" fill="#22C55E" name="Entradas" radius={[4, 4, 0, 0]} />
+                                                        <Bar dataKey="salidas" fill="#EF4444" name="Salidas" radius={[4, 4, 0, 0]} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </motion.div>
@@ -1063,15 +1140,19 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                             <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Principales categorías de gastos del periodo</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <BarChart data={data?.financieros.distribucionGastos ?? []} layout="vertical">
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                    <XAxis type="number" stroke="#E5E7EB" tickFormatter={(value) => `$${value / 1000}K`} />
-                                                    <YAxis dataKey="categoria" type="category" width={100} stroke="#E5E7EB" />
-                                                    <RechartsTooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
-                                                    <Bar dataKey="monto" fill="#3B82F6" name="Monto" radius={[0, 4, 4, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
+                                            {distribucionGastosData.length === 0 ? (
+                                                <PlaceholderSinDatos />
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <BarChart data={distribucionGastosData} layout="vertical">
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                                        <XAxis type="number" stroke="#E5E7EB" tickFormatter={(value) => `$${value / 1000}K`} />
+                                                        <YAxis dataKey="categoria" type="category" width={100} stroke="#E5E7EB" />
+                                                        <RechartsTooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
+                                                        <Bar dataKey="monto" fill="#3B82F6" name="Monto" radius={[0, 4, 4, 0]} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </motion.div>
@@ -1088,21 +1169,25 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                             <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Tendencia de rentabilidad con área sombreada</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <AreaChart data={data?.financieros.rentabilidad ?? []}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                    <XAxis dataKey="month" stroke="#E5E7EB" angle={-45} textAnchor="end" height={80} />
-                                                    <YAxis stroke="#E5E7EB" tickFormatter={(value) => `${value}%`} />
-                                                    <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value}%`} />} />
-                                                    <defs>
-                                                        <linearGradient id="colorRentabilidad" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#2563eb" stopOpacity={0.8} />
-                                                            <stop offset="95%" stopColor="#2563eb" stopOpacity={0.1} />
-                                                        </linearGradient>
-                                                    </defs>
-                                                    <Area type="monotone" dataKey="rentabilidad" stroke="#2563eb" strokeWidth={3} fill="url(#colorRentabilidad)" name="Rentabilidad" />
-                                                </AreaChart>
-                                            </ResponsiveContainer>
+                                            {rentabilidadHistoricaData.length === 0 ? (
+                                                <PlaceholderSinDatos />
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <AreaChart data={rentabilidadHistoricaData}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                                        <XAxis dataKey="month" stroke="#E5E7EB" angle={-45} textAnchor="end" height={80} />
+                                                        <YAxis stroke="#E5E7EB" tickFormatter={(value) => `${value}%`} />
+                                                        <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value}%`} />} />
+                                                        <defs>
+                                                            <linearGradient id="colorRentabilidad" x1="0" y1="0" x2="0" y2="1">
+                                                                <stop offset="5%" stopColor="#2563eb" stopOpacity={0.8} />
+                                                                <stop offset="95%" stopColor="#2563eb" stopOpacity={0.1} />
+                                                            </linearGradient>
+                                                        </defs>
+                                                        <Area type="monotone" dataKey="rentabilidad" stroke="#2563eb" strokeWidth={3} fill="url(#colorRentabilidad)" name="Rentabilidad" />
+                                                    </AreaChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </motion.div>
@@ -1119,18 +1204,22 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                             <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Datos históricos y proyección con escenarios</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <LineChart data={data?.financieros.proyeccion ?? []}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                    <XAxis dataKey="month" stroke="#E5E7EB" />
-                                                    <YAxis stroke="#E5E7EB" tickFormatter={(value) => `$${value / 1000}K`} />
-                                                    <RechartsTooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
-                                                    <Legend />
-                                                    <Line type="monotone" dataKey="real" stroke="#2563eb" strokeWidth={3} name="Real" dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }} connectNulls={false} />
-                                                    <Line type="monotone" dataKey="optimista" stroke="#22C55E" strokeWidth={2} strokeDasharray="5 5" name="Optimista" dot={{ fill: '#22C55E', strokeWidth: 2, r: 4 }} connectNulls={false} />
-                                                    <Line type="monotone" dataKey="pesimista" stroke="#EF4444" strokeWidth={2} strokeDasharray="5 5" name="Pesimista" dot={{ fill: '#EF4444', strokeWidth: 2, r: 4 }} connectNulls={false} />
-                                                </LineChart>
-                                            </ResponsiveContainer>
+                                            {proyeccionData.length === 0 ? (
+                                                <PlaceholderSinDatos />
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <LineChart data={proyeccionData}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                                        <XAxis dataKey="month" stroke="#E5E7EB" />
+                                                        <YAxis stroke="#E5E7EB" tickFormatter={(value) => `$${value / 1000}K`} />
+                                                        <RechartsTooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
+                                                        <Legend />
+                                                        <Line type="monotone" dataKey="real" stroke="#2563eb" strokeWidth={3} name="Real" dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }} connectNulls={false} />
+                                                        <Line type="monotone" dataKey="optimista" stroke="#22C55E" strokeWidth={2} strokeDasharray="5 5" name="Optimista" dot={{ fill: '#22C55E', strokeWidth: 2, r: 4 }} connectNulls={false} />
+                                                        <Line type="monotone" dataKey="pesimista" stroke="#EF4444" strokeWidth={2} strokeDasharray="5 5" name="Pesimista" dot={{ fill: '#EF4444', strokeWidth: 2, r: 4 }} connectNulls={false} />
+                                                    </LineChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </motion.div>
