@@ -26,7 +26,7 @@ export interface DashboardSummary {
     ventasPorMes: VentaPorMes[];
     topClientes: TopCliente[];
     ventasPorCategoria?: Array<{ categoria: string; ventas: number }>;
-    pedidosRecientes?: Array<{ id: string; cliente: string; monto: string; categoria: string; estado: string }>;
+    pedidosRecientes?: Array<{ id: string; cliente: string; monto: number; categoria: string; estado: string }>;
   };
   inventario: {
     stockTotal: number;

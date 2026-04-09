@@ -459,7 +459,10 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
             };
         }
 
-        if (Number(item.tipo) === 0) {
+        const tipoNormalizado =
+            typeof item.tipo === 'string' ? item.tipo.toLowerCase() : item.tipo;
+
+        if (tipoNormalizado === 0 || tipoNormalizado === 'ingreso') {
             acc[key].entradas += item.monto;
         } else {
             acc[key].salidas += item.monto;
