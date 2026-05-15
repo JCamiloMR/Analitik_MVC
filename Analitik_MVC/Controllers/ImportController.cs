@@ -568,7 +568,6 @@ public class ImportController : ControllerBase
                 {
                     p.CodigoProducto,
                     p.Nombre,
-                    p.Categoria,
                     p.Subcategoria,
                     p.Marca,
                     p.PrecioVenta,

@@ -120,18 +120,18 @@ public class DashboardController : ControllerBase
                 .Take(5)
                 .ToListAsync();
 
-            var ventasPorCategoria = await _context.DetallesVenta
+            var ventasPorCategoria = await _context.Ventas
                 .AsNoTracking()
-                .Where(d => d.Venta.EmpresaId == empresaIdFinal &&
-                            d.Venta.FechaVenta >= fechaDesde &&
-                            d.Venta.FechaVenta <= fechaHasta)
-                .GroupBy(d => !string.IsNullOrWhiteSpace(d.Producto.Subcategoria)
-                    ? d.Producto.Subcategoria!
-                    : (!string.IsNullOrWhiteSpace(d.Venta.Categoria) ? d.Venta.Categoria! : "Sin categoría"))
+                .Where(d => d.EmpresaId == empresaIdFinal &&
+                            d.FechaVenta >= fechaDesde &&
+                            d.FechaVenta <= fechaHasta)
+                .GroupBy(d => !string.IsNullOrWhiteSpace(d.Categoria)
+                    ? d.Categoria!
+                    : (!string.IsNullOrWhiteSpace(d.Categoria) ? d.Categoria! : "Sin categoría"))
                 .Select(g => new
                 {
                     categoria = g.Key,
-                    ventas = g.Sum(x => x.Total)
+                    ventas = g.Sum(x => x.CostoTotal)
                 })
                 .OrderByDescending(x => x.ventas)
                 .Take(8)

@@ -90,6 +90,7 @@ public class ExcelReaderService
                 var codigoProducto = fila.Cell(indices.CodigoProducto).GetString();
                 var nombre = fila.Cell(indices.Nombre).GetString();
                 var precioVentaRaw = fila.Cell(indices.PrecioVenta).Value;
+                var subcategoria = fila.Cell((int)indices.Subcategoria!).GetString();
                 var unidadMedida = fila.Cell(indices.UnidadMedida).GetString();
                 var requiereInventarioRaw = fila.Cell(indices.RequiereInventario).Value;
                 var activoRaw = fila.Cell(indices.Activo).Value;
@@ -283,9 +284,7 @@ public class ExcelReaderService
                     Activo = activo,
                     CostoUnitario = costoUnitario,
                     Categoria = categoria,
-                    Subcategoria = indices.Subcategoria.HasValue 
-                        ? fila.Cell(indices.Subcategoria.Value).GetString()?.Trim() 
-                        : null,
+                    Subcategoria = categoria,
                     Marca = indices.Marca.HasValue 
                         ? fila.Cell(indices.Marca.Value).GetString()?.Trim() 
                         : null,
