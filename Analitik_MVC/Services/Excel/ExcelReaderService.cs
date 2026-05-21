@@ -828,6 +828,23 @@ public class ExcelReaderService
                     FilaOrigen = numeroFila
                 };
 
+                // Extraer detalles de productos (líneas de venta)
+                var (detalles, detalleErrores) = ExtraerDetallesVenta(
+                    fila, 
+                    numeroOrden, 
+                    productosValidos, 
+                    numeroFila, 
+                    empresaId);
+
+                venta.Detalles = detalles;
+
+                // Agregar errores de detalles si los hay
+                if (detalleErrores.Any())
+                {
+                    errores.AddRange(detalleErrores);
+                    // No interrumpir el flujo, continuar procesando
+                }
+
                 ventas.Add(venta);
             }
             catch (Exception ex)
@@ -843,6 +860,203 @@ public class ExcelReaderService
             return (ventas, ValidationResult.Failure(errores, advertencias));
 
         return (ventas, new ValidationResult { IsSuccess = true, Warnings = advertencias });
+    }
+
+    /// <summary>
+    /// Extrae detalles de productos de columnas dinámicas: codigo_producto_{n}, cantidad_{n}, precio_unitario_{n}, etc.
+    /// Retorna lista de DetalleVentaDTO y lista de errores de validación
+    /// </summary>
+    private (List<DetalleVentaDTO> Detalles, List<ErrorValidacion> Errores) ExtraerDetallesVenta(
+        IXLRow fila,
+        string numeroOrden,
+        List<ProductoDTO> productosValidos,
+        int numeroFila,
+        Guid empresaId)
+    {
+        var detalles = new List<DetalleVentaDTO>();
+        var errores = new List<ErrorValidacion>();
+        var codigosValidosSet = new HashSet<string>(productosValidos.Select(p => p.CodigoProducto));
+
+        // Buscar patrones de columnas dinámicas: codigo_producto_1, cantidad_1, precio_unitario_1, etc.
+        // Obtener todas las celdas de la fila
+        var celdas = fila.Cells().ToList();
+
+        // Detectar números de línea (1, 2, 3, etc.)
+        var numeroLineas = new HashSet<int>();
+        foreach (var celda in celdas)
+        {
+            var encabezado = fila.Worksheet.Row(1).Cell(celda.Address.ColumnNumber).GetString()?.ToLower() ?? "";
+
+            // Buscar patrones como "codigo_producto_1", "cantidad_2", etc.
+            if (encabezado.Contains("codigo_producto_") || 
+                encabezado.Contains("cantidad_") || 
+                encabezado.Contains("precio_unitario_"))
+            {
+                // Extraer el número (ej: "codigo_producto_1" → 1)
+                var parts = encabezado.Split('_');
+                if (parts.Length > 0 && int.TryParse(parts[^1], out var num))
+                {
+                    numeroLineas.Add(num);
+                }
+            }
+        }
+
+        // Procesar cada línea de detalle
+        foreach (var numLinea in numeroLineas.OrderBy(x => x))
+        {
+            try
+            {
+                // Obtener índices dinámicamente
+                var idxCodigo = _validationService.GetColumnIndex(fila.Worksheet, $"codigo_producto_{numLinea}");
+                var idxCantidad = _validationService.GetColumnIndex(fila.Worksheet, $"cantidad_{numLinea}");
+                var idxPrecio = _validationService.GetColumnIndex(fila.Worksheet, $"precio_unitario_{numLinea}");
+                var idxDescuentoPct = _validationService.GetColumnIndex(fila.Worksheet, $"descuento_porcentaje_{numLinea}");
+                var idxSubtotal = _validationService.GetColumnIndex(fila.Worksheet, $"subtotal_{numLinea}");
+                var idxImpuesto = _validationService.GetColumnIndex(fila.Worksheet, $"impuesto_monto_{numLinea}");
+
+                // Validar que existan al menos código, cantidad y precio
+                if (!idxCodigo.HasValue || !idxCantidad.HasValue || !idxPrecio.HasValue)
+                    continue; // No hay columnas de detalle para esta línea, es opcional
+
+                var codigo = _transformationService.NormalizeCodigo(
+                    fila.Cell(idxCodigo.Value).GetString());
+
+                // Si código está vacío, es opcional, saltar
+                if (string.IsNullOrWhiteSpace(codigo))
+                    continue;
+
+                // Validar que código existe
+                if (!codigosValidosSet.Contains(codigo))
+                {
+                    errores.Add(new ErrorValidacion
+                    {
+                        Fila = numeroFila,
+                        Columna = $"codigo_producto_{numLinea}",
+                        Error = $"Código '{codigo}' no existe en hoja PRODUCTOS",
+                        ValorEncontrado = codigo,
+                        Sugerencia = "Verifica que el producto esté en hoja PRODUCTOS"
+                    });
+                    continue;
+                }
+
+                // Parsear cantidad
+                decimal cantidad;
+                try
+                {
+                    cantidad = _transformationService.ParseDecimal(fila.Cell(idxCantidad.Value).Value);
+                    if (cantidad <= 0)
+                    {
+                        errores.Add(new ErrorValidacion
+                        {
+                            Fila = numeroFila,
+                            Columna = $"cantidad_{numLinea}",
+                            Error = "Debe ser mayor a 0",
+                            ValorEncontrado = cantidad.ToString()
+                        });
+                        continue;
+                    }
+                }
+                catch
+                {
+                    errores.Add(new ErrorValidacion
+                    {
+                        Fila = numeroFila,
+                        Columna = $"cantidad_{numLinea}",
+                        Error = "Formato inválido",
+                        TipoDatoEsperado = "decimal"
+                    });
+                    continue;
+                }
+
+                // Parsear precio unitario
+                decimal precioUnitario;
+                try
+                {
+                    precioUnitario = _transformationService.ParseCurrency(fila.Cell(idxPrecio.Value).Value);
+                    if (precioUnitario <= 0)
+                    {
+                        errores.Add(new ErrorValidacion
+                        {
+                            Fila = numeroFila,
+                            Columna = $"precio_unitario_{numLinea}",
+                            Error = "Debe ser mayor a 0",
+                            ValorEncontrado = precioUnitario.ToString()
+                        });
+                        continue;
+                    }
+                }
+                catch
+                {
+                    errores.Add(new ErrorValidacion
+                    {
+                        Fila = numeroFila,
+                        Columna = $"precio_unitario_{numLinea}",
+                        Error = "Formato inválido",
+                        TipoDatoEsperado = "decimal"
+                    });
+                    continue;
+                }
+
+                // Parsear descuento porcentaje (opcional)
+                decimal descuentoPct = 0m;
+                if (idxDescuentoPct.HasValue)
+                {
+                    var descRaw = fila.Cell(idxDescuentoPct.Value).Value;
+                    if (!string.IsNullOrWhiteSpace(descRaw.ToString()))
+                    {
+                        try
+                        {
+                            descuentoPct = _transformationService.ParseDecimal(descRaw);
+                            if (descuentoPct < 0 || descuentoPct > 100)
+                            {
+                                errores.Add(new ErrorValidacion
+                                {
+                                    Fila = numeroFila,
+                                    Columna = $"descuento_porcentaje_{numLinea}",
+                                    Error = "Debe estar entre 0 y 100",
+                                    ValorEncontrado = descuentoPct.ToString()
+                                });
+                                continue;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                // Calcular subtotal y descuento monto
+                var subtotal = cantidad * precioUnitario;
+                var descuentoMonto = (subtotal * descuentoPct) / 100m;
+                var subtotalConDescuento = subtotal - descuentoMonto;
+
+                // Crear detalle
+                var detalle = new DetalleVentaDTO
+                {
+                    NumeroOrden = numeroOrden,
+                    CodigoProducto = codigo,
+                    Cantidad = cantidad,
+                    PrecioUnitario = precioUnitario,
+                    DescuentoPorcentaje = descuentoPct > 0 ? descuentoPct : null,
+                    Subtotal = subtotalConDescuento,
+                    EmpresaId = empresaId,
+                    FilaOrigen = numeroFila
+                };
+
+                detalles.Add(detalle);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error extrayendo detalle {Linea} de venta {Orden} en fila {Fila}",
+                    numLinea, numeroOrden, numeroFila);
+                errores.Add(new ErrorValidacion
+                {
+                    Fila = numeroFila,
+                    Columna = $"detalle_{numLinea}",
+                    Error = $"Error procesando línea de detalle: {ex.Message}"
+                });
+            }
+        }
+
+        return (detalles, errores);
     }
 
     /// <summary>

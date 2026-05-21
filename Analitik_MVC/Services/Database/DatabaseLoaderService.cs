@@ -263,7 +263,7 @@ public class DatabaseLoaderService
     }
 
     /// <summary>
-    /// Carga ventas y sus detalles
+    /// Carga ventas, detalles de venta y movimientos de inventario
     /// </summary>
     private async Task<int> CargarVentas(List<VentaDTO> ventasDTO, Guid empresaId)
     {
@@ -272,19 +272,35 @@ public class DatabaseLoaderService
         // 1. Cargar ventas existentes de la empresa y crear diccionario por NumeroOrden
         var ventasExistentes = await _dbContext.Ventas
             .Where(v => v.EmpresaId == empresaId)
+            .Include(v => v.DetallesVenta)
             .ToListAsync();
 
         var ventasExistentesMap = ventasExistentes
             .ToDictionary(v => v.NumeroOrden.Trim().ToUpper(), v => v);
 
-        // 2. Trackear NumeroOrden que vienen en el Excel
+        // 2. Obtener mapa de productos por código
+        var codigosProductos = ventasDTO
+            .SelectMany(v => v.Detalles.Select(d => d.CodigoProducto))
+            .Distinct()
+            .ToList();
+
+        var productosMap = await _dbContext.Productos
+            .Where(p => p.EmpresaId == empresaId && codigosProductos.Contains(p.CodigoProducto))
+            .ToDictionaryAsync(p => p.CodigoProducto, p => p.Id);
+
+        // 3. Obtener mapa de inventarios
+        var inventariosMap = await _dbContext.Inventarios
+            .Where(i => productosMap.Values.Contains(i.ProductoId))
+            .ToDictionaryAsync(i => i.ProductoId);
+
+        // 4. Trackear NumeroOrden que vienen en el Excel
         var ordenesEnCarga = new HashSet<string>(
             ventasDTO
                 .Select(v => (v.NumeroOrden ?? string.Empty).Trim().ToUpper())
                 .Where(o => !string.IsNullOrWhiteSpace(o))
         );
 
-        // 3. Upsert (update si existe, insert si no existe)
+        // 5. Upsert ventas (update si existe, insert si no existe)
         foreach (var dto in ventasDTO)
         {
             var numeroOrden = (dto.NumeroOrden ?? string.Empty).Trim().ToUpper();
@@ -314,6 +330,9 @@ public class DatabaseLoaderService
                     ? DateTime.SpecifyKind(dto.FechaVenta, DateTimeKind.Utc)
                     : dto.FechaVenta.ToUniversalTime();
 
+            Venta ventaEntity;
+            bool esNuevaVenta = false;
+
             if (ventasExistentesMap.TryGetValue(numeroOrden, out var existente))
             {
                 // UPDATE
@@ -337,6 +356,7 @@ public class DatabaseLoaderService
                 existente.UpdatedAt = DateTime.UtcNow;
 
                 _dbContext.Ventas.Update(existente);
+                ventaEntity = existente;
             }
             else
             {
@@ -368,12 +388,90 @@ public class DatabaseLoaderService
                 };
 
                 await _dbContext.Ventas.AddAsync(nuevaVenta);
+                ventaEntity = nuevaVenta;
+                esNuevaVenta = true;
+            }
+
+            // 6. CREAR DETALLES DE VENTA Y MOVIMIENTOS DE INVENTARIO
+            if (dto.Detalles.Any())
+            {
+                // Si es actualización, eliminar detalles anteriores
+                if (!esNuevaVenta && ventaEntity.DetallesVenta.Any())
+                {
+                    _dbContext.DetallesVenta.RemoveRange(ventaEntity.DetallesVenta);
+                }
+
+                // Crear nuevos detalles
+                foreach (var detalle in dto.Detalles)
+                {
+                    if (!productosMap.TryGetValue(detalle.CodigoProducto, out var productoId))
+                    {
+                        _logger.LogWarning("Producto {Codigo} no encontrado para detalle de venta {Orden}",
+                            detalle.CodigoProducto, numeroOrden);
+                        continue;
+                    }
+
+                    // Crear DetallesVentum
+                    var detalleVentaEntity = new DetallesVentum
+                    {
+                        Id = Guid.NewGuid(),
+                        VentaId = ventaEntity.Id,
+                        ProductoId = productoId,
+                        Cantidad = detalle.Cantidad,
+                        PrecioUnitario = detalle.PrecioUnitario,
+                        DescuentoPorcentaje = detalle.DescuentoPorcentaje,
+                        DescuentoMonto = (detalle.Cantidad * detalle.PrecioUnitario * (detalle.DescuentoPorcentaje ?? 0)) / 100m,
+                        Subtotal = detalle.Cantidad * detalle.PrecioUnitario,
+                        ImpuestoMonto = 0, // Calculado desde nivel de venta
+                        Total = detalle.Subtotal,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    await _dbContext.DetallesVenta.AddAsync(detalleVentaEntity);
+
+                    // Crear MovimientosInventario (SALIDA)
+                    if (inventariosMap.TryGetValue(productoId, out var inventario))
+                    {
+                        var cantidadAnterior = inventario.CantidadDisponible;
+                        var cantidadNueva = cantidadAnterior - (int)detalle.Cantidad;
+
+                        var movimiento = new MovimientosInventario
+                        {
+                            Id = Guid.NewGuid(),
+                            InventarioId = inventario.Id,
+                            EmpresaId = empresaId,
+                            TipoMovimiento = MovimientoInventario.Salida,
+                            Cantidad = (int)detalle.Cantidad,
+                            CantidadAnterior = cantidadAnterior,
+                            CantidadNueva = Math.Max(0, cantidadNueva),
+                            Motivo = "Venta",
+                            Referencia = numeroOrden,
+                            NumeroDocumento = dto.NumeroFactura,
+                            VentaId = ventaEntity.Id,
+                            FechaMovimiento = fechaVentaUtc,
+                            Observaciones = $"Venta de {detalle.Cantidad} unidades de {detalle.CodigoProducto}",
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        await _dbContext.MovimientosInventarios.AddAsync(movimiento);
+
+                        // Actualizar stock en inventario
+                        inventario.CantidadDisponible = Math.Max(0, cantidadNueva);
+                        inventario.UltimaSalida = fechaVentaUtc;
+                        inventario.UpdatedAt = DateTime.UtcNow;
+                        _dbContext.Inventarios.Update(inventario);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Inventario no encontrado para producto {Codigo}", detalle.CodigoProducto);
+                    }
+                }
             }
 
             procesados++;
         }
 
-        // 4. Eliminar ventas que existen en BD pero no vienen en el nuevo Excel
+        // 7. Eliminar ventas que existen en BD pero no vienen en el nuevo Excel
         var ventasAEliminar = ventasExistentes
             .Where(v => !ordenesEnCarga.Contains(v.NumeroOrden.Trim().ToUpper()))
             .ToList();
@@ -382,12 +480,18 @@ public class DatabaseLoaderService
         {
             var idsVentasAEliminar = ventasAEliminar.Select(v => v.Id).ToList();
 
-            // Eliminar primero detalles_venta para respetar FK
+            // Eliminar movimientos de inventario asociados
+            var movimientosAEliminar = await _dbContext.MovimientosInventarios
+                .Where(m => m.VentaId.HasValue && idsVentasAEliminar.Contains(m.VentaId.Value))
+                .ToListAsync();
+            _dbContext.MovimientosInventarios.RemoveRange(movimientosAEliminar);
+
+            // Eliminar detalles_venta
             var detallesAEliminar = await _dbContext.DetallesVenta
                 .Where(d => idsVentasAEliminar.Contains(d.VentaId))
                 .ToListAsync();
-
             _dbContext.DetallesVenta.RemoveRange(detallesAEliminar);
+
             _dbContext.Ventas.RemoveRange(ventasAEliminar);
         }
 
