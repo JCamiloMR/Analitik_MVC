@@ -120,22 +120,57 @@ public class DashboardController : ControllerBase
                 .Take(5)
                 .ToListAsync();
 
-            var ventasPorCategoria = await _context.Ventas
-                .AsNoTracking()
-                .Where(d => d.EmpresaId == empresaIdFinal &&
-                            d.FechaVenta >= fechaDesde &&
-                            d.FechaVenta <= fechaHasta)
-                .GroupBy(d => !string.IsNullOrWhiteSpace(d.Categoria)
-                    ? d.Categoria!
-                    : (!string.IsNullOrWhiteSpace(d.Categoria) ? d.Categoria! : "Sin categoría"))
-                .Select(g => new
-                {
-                    categoria = g.Key,
-                    ventas = g.Sum(x => x.CostoTotal)
-                })
-                .OrderByDescending(x => x.ventas)
-                .Take(8)
-                .ToListAsync();
+
+            var ventasPorCategoria = await _context.DetallesVenta
+    .AsNoTracking()
+    .Where(dv =>
+        dv.Venta.EmpresaId == empresaIdFinal &&
+        dv.Venta.FechaVenta >= fechaDesde &&
+        dv.Venta.FechaVenta <= fechaHasta)
+    .Select(dv => new
+    {
+        Categoria = dv.Producto.Subcategoria ?? "Sin categoría",
+        VentaId = dv.VentaId,
+        MontoTotal = dv.Venta.MontoTotal
+    })
+    .Distinct()
+    .GroupBy(x => x.Categoria)
+    .Select(g => new
+    {
+        categoria = g.Key,
+        ventas = g.Sum(x => x.MontoTotal)
+    })
+    .OrderByDescending(x => x.ventas)
+    .Take(8)
+    .ToListAsync();
+
+
+            //var ventasPorCategoria = _context.DetallesVenta
+            //    .GroupBy(dv => dv.Producto.Subcategoria)
+            //    .Select(g => new
+            //    {
+            //        categoria = g.Key,
+            //        ventas = g.Count()
+            //    });
+
+            //var ventasPorCategoria = await _context.Ventas
+            //    .AsNoTracking()
+            //    .Where(d => d.EmpresaId == empresaIdFinal &&
+            //                d.FechaVenta >= fechaDesde &&
+            //                d.FechaVenta <= fechaHasta)
+
+            //    .GroupBy(d => d.Categoria)
+            //    .GroupBy(d => !string.IsNullOrWhiteSpace(d.Categoria)
+            //        ? d.Categoria!
+            //        : (!string.IsNullOrWhiteSpace(d.Categoria) ? d.Categoria! : "Sin categoría"))
+            //    .Select(g => new
+            //    {
+            //        categoria = g.Key,
+            //        ventas = g.Sum(x => x.MontoTotal)
+            //    })
+            //    .OrderByDescending(x => x.ventas)
+            //    .Take(8)
+            //    .ToListAsync();
 
             var pedidosRecientes = await _context.Ventas
                 .AsNoTracking()
