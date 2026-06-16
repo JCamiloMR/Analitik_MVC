@@ -1,9 +1,7 @@
-
 import { getDashboardSummary, handleDashboardError, DashboardSummary } from "./dashboardService";
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
 import { Skeleton } from './ui/skeleton';
@@ -19,9 +17,7 @@ import {
     BarChart,
     Bar,
     Cell,
-    ComposedChart,
     Legend,
-    ReferenceLine,
     Area,
     AreaChart
 } from 'recharts';
@@ -113,130 +109,15 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
 
 
     // ==================== VENTAS DATA ====================
-    const salesTrendData = [
-        { month: 'Ene', ventas: 98000, proyectado: null },
-        { month: 'Feb', ventas: 102000, proyectado: null },
-        { month: 'Mar', ventas: 95000, proyectado: null },
-        { month: 'Abr', ventas: 108000, proyectado: null },
-        { month: 'May', ventas: 112000, proyectado: null },
-        { month: 'Jun', ventas: 118000, proyectado: null },
-        { month: 'Jul', ventas: 121000, proyectado: null },
-        { month: 'Ago', ventas: 115000, proyectado: null },
-        { month: 'Sep', ventas: 124590, proyectado: null },
-        { month: 'Oct', ventas: null, proyectado: 130000 },
-        { month: 'Nov', ventas: null, proyectado: 135000 },
-        { month: 'Dic', ventas: null, proyectado: 142000 }
-    ];
+    // Los datasets mock fueron removidos. Los datos reales se obtienen desde `data` (DashboardSummary)
+    // Reemplazos en uso más abajo: ventasPorMesData, topClientesData, ventasPorCategoriaData, pedidosRecientesData
+    // inventarioPorCategoriaData, inventarioMovimientosData, inventarioRotacionData
+    // margenMensualData, eficienciaTurnoData, desperdicioData, tiemposEtapaData
+    // distribucionGastosData, rentabilidadHistoricaData, proyeccionData, flujoCajaArray
 
-    const topClientsData = [
-        { cliente: 'Empresa ABC S.A.', ventas: 28500 },
-        { cliente: 'Corporación XYZ', ventas: 24200 },
-        { cliente: 'Industrias DEF', ventas: 19800 },
-        { cliente: 'Comercial GHI', ventas: 16500 },
-        { cliente: 'Distribuidora JKL', ventas: 14300 }
-    ];
-
-    const noMovementProducts = [
-        { producto: 'Camisa Formal XL', categoria: 'Formal', dias: 87, valor: '$1,250,000' },
-        { producto: 'Pantalón Casual 34', categoria: 'Casual', dias: 75, valor: '$890,000' },
-        { producto: 'Uniforme Industrial L', categoria: 'Uniformes', dias: 68, valor: '$2,100,000' },
-        { producto: 'Blazer Negro M', categoria: 'Formal', dias: 62, valor: '$1,580,000' },
-        { producto: 'Polo Deportivo XXL', categoria: 'Casual', dias: 54, valor: '$680,000' },
-        { producto: 'Camisa Ejecutiva L', categoria: 'Formal', dias: 48, valor: '$950,000' },
-        { producto: 'Jean Clásico 32', categoria: 'Casual', dias: 45, valor: '$720,000' },
-        { producto: 'Chaqueta Industrial XL', categoria: 'Uniformes', dias: 41, valor: '$1,820,000' }
-    ];
-
-
-
-    const rotationByProductData = [
-        { producto: 'Camisa Polo M', rotacion: 18.5, type: 'top' },
-        { producto: 'Pantalón Negro 32', rotacion: 16.2, type: 'top' },
-        { producto: 'Uniforme Médico M', rotacion: 15.8, type: 'top' },
-        { producto: 'Jean Azul 30', rotacion: 14.3, type: 'top' },
-        { producto: 'Camisa Blanca L', rotacion: 13.7, type: 'top' },
-        { producto: 'Blazer Gris XL', rotacion: 2.1, type: 'bottom' },
-        { producto: 'Chaqueta Cuero L', rotacion: 1.8, type: 'bottom' },
-        { producto: 'Vestido Formal M', rotacion: 1.5, type: 'bottom' },
-        { producto: 'Abrigo Negro XL', rotacion: 1.2, type: 'bottom' },
-        { producto: 'Traje Completo L', rotacion: 0.8, type: 'bottom' }
-    ];
 
     // ==================== OPERACIONES DATA ====================
-    const marginEvolutionData = [
-        { month: 'Abr', margen: 31.2 },
-        { month: 'May', margen: 32.8 },
-        { month: 'Jun', margen: 30.5 },
-        { month: 'Jul', margen: 33.4 },
-        { month: 'Ago', margen: 32.6 },
-        { month: 'Sep', margen: 34.7 }
-    ];
-
-    const efficiencyByShiftData = [
-        { turno: 'Mañana', eficiencia: 92.5 },
-        { turno: 'Tarde', eficiencia: 88.3 },
-        { turno: 'Noche', eficiencia: 82.1 }
-    ];
-
-    const wasteDetailData = [
-        { material: 'Tela Algodón', desperdicio: 320000 },
-        { material: 'Tela Poliéster', desperdicio: 280000 },
-        { material: 'Botones', desperdicio: 120000 },
-        { material: 'Hilos', desperdicio: 95000 },
-        { material: 'Cierres', desperdicio: 75000 }
-    ];
-
-    const processStageTimes = [
-        { etapa: 'Pedido', tiempo: 0.5 },
-        { etapa: 'Producción', tiempo: 1.2 },
-        { etapa: 'Control Calidad', tiempo: 0.3 },
-        { etapa: 'Entrega', tiempo: 0.4 }
-    ];
-
     // ==================== FINANCIEROS DATA ====================
-    const cashFlowData = [
-        { month: 'Abr', entradas: 32500, salidas: 28300 },
-        { month: 'May', entradas: 35800, salidas: 29500 },
-        { month: 'Jun', entradas: 38200, salidas: 31200 },
-        { month: 'Jul', entradas: 41500, salidas: 33800 },
-        { month: 'Ago', entradas: 39800, salidas: 32500 },
-        { month: 'Sep', entradas: 42600, salidas: 34200 }
-    ];
-
-    const expenseDistributionData = [
-        { categoria: 'Nómina', monto: 12500 },
-        { categoria: 'Materias Primas', monto: 10200 },
-        { categoria: 'Servicios', monto: 4800 },
-        { categoria: 'Marketing', monto: 3200 },
-        { categoria: 'Logística', monto: 2500 },
-        { categoria: 'Tecnología', monto: 1000 }
-    ];
-
-    const profitabilityEvolutionData = [
-        { month: 'Oct-23', rentabilidad: 18.5 },
-        { month: 'Nov-23', rentabilidad: 19.2 },
-        { month: 'Dic-23', rentabilidad: 17.8 },
-        { month: 'Ene-24', rentabilidad: 18.9 },
-        { month: 'Feb-24', rentabilidad: 19.8 },
-        { month: 'Mar-24', rentabilidad: 20.5 },
-        { month: 'Abr-24', rentabilidad: 19.7 },
-        { month: 'May-24', rentabilidad: 21.2 },
-        { month: 'Jun-24', rentabilidad: 20.8 },
-        { month: 'Jul-24', rentabilidad: 21.5 },
-        { month: 'Ago-24', rentabilidad: 21.9 },
-        { month: 'Sep-24', rentabilidad: 22.1 }
-    ];
-
-    const projectionData = [
-        { month: 'Jul', real: 21500, optimista: null, pesimista: null },
-        { month: 'Ago', real: 21900, optimista: null, pesimista: null },
-        { month: 'Sep', real: 22100, optimista: null, pesimista: null },
-        { month: 'Oct', real: null, optimista: 23500, pesimista: 22000 },
-        { month: 'Nov', real: null, optimista: 24800, pesimista: 22800 },
-        { month: 'Dic', real: null, optimista: 26200, pesimista: 23500 }
-    ];
-
-    // ==================== KPI DATA ====================
     const getKPIData = () => {
         switch (departmentFilter) {
             case 'ventas':
@@ -349,9 +230,9 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                     },
                     {
                         title: 'Desperdicios',
-                        value: '$890K', //EL BACKEND NO ESTA MANDANDO ESTE DATO, SE DEBE CALCULAR O AGREGAR EN EL FUTURO
-                        change: '3.2% del total',
-                        trend: 'down',
+                        value: formatCurrency(desperdicioTotal),
+                        change: desperdicioData.length > 0 ? `${desperdicioData.length} materiales analizados` : 'Sin datos para el período',
+                        trend: desperdicioTotal > 0 ? 'down' : 'up',
                         icon: AlertCircle,
                         description: 'Lo que se pierde en materiales y su costo.',
                         linkText: 'Ver detalle de desperdicio',
@@ -439,6 +320,9 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
     const inventarioPorCategoriaData = data?.inventario.inventarioPorCategoria ?? [];
     const inventarioMovimientosData = data?.inventario.movimientos ?? [];
     const inventarioRotacionData = data?.inventario.rotacion ?? [];
+    const productosMenorRotacion = inventarioRotacionData
+        .filter((item: NonNullable<DashboardSummary['inventario']['rotacion']>[number]) => item.type === 'bottom')
+        .slice(0, 5);
     const margenMensualData = data?.operaciones.margenMensual ?? [];
     const eficienciaTurnoData = data?.operaciones.eficienciaTurno ?? [];
     const desperdicioData = data?.operaciones.desperdicio ?? [];
@@ -446,8 +330,13 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
     const distribucionGastosData = data?.financieros.distribucionGastos ?? [];
     const rentabilidadHistoricaData = data?.financieros.rentabilidadHistorica ?? [];
     const proyeccionData = data?.financieros.proyeccion ?? [];
+    const desperdicioTotal = desperdicioData.reduce(
+        (total: number, item: NonNullable<DashboardSummary['operaciones']['desperdicio']>[number]) => total + item.desperdicio,
+        0
+    );
 
-    const flujoCajaTransformado = (data?.financieros.flujoCajaPorMes ?? []).reduce<Record<string, { month: string; entradas: number; salidas: number }>>((acc, item) => {
+    const flujoCajaTransformado = (data?.financieros.flujoCajaPorMes ?? []).reduce<Record<string, { month: string; entradas: number; salidas: number }>>(
+        (acc: Record<string, { month: string; entradas: number; salidas: number }>, item: NonNullable<DashboardSummary['financieros']['flujoCajaPorMes']>[number]) => {
         const anio = item.anio ?? new Date().getFullYear();
         const key = `${anio}-${item.mes}`;
 
@@ -642,7 +531,7 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                     <Card id="trend" className="bg-white dark:bg-[#273043] border-slate-200 dark:border-[#374151] hover:shadow-lg transition-all duration-200 rounded-xl">
                                         <CardHeader>
                                             <CardTitle className="text-slate-900 dark:text-[#F1F5F9]">Tendencia de Ventas (12 meses)</CardTitle>
-                                            <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Ventas mensuales con proyección futura</CardDescription>
+                                            <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Ventas mensuales del período seleccionado</CardDescription>
                                         </CardHeader>
                                         <CardContent>
                                             {ventasPorMesData.length === 0 ? (
@@ -656,7 +545,6 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                                         <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `$${value.toLocaleString()} COP`} />} />
                                                         <Legend />
                                                         <Line type="monotone" dataKey="ventas" stroke="#2563eb" strokeWidth={3} name="Ventas" dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }} connectNulls={false} />
-                                                        <Line type="monotone" dataKey="proyectado" stroke="#FACC15" strokeWidth={3} strokeDasharray="5 5" name="Proyección" dot={{ fill: '#FACC15', strokeWidth: 2, r: 4 }} connectNulls={false} />
                                                     </LineChart>
                                                 </ResponsiveContainer>
                                             )}
@@ -824,7 +712,7 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                                         <YAxis stroke={axisColor} />
                                                         <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value} unidades`} />} />
                                                         <Bar dataKey="nivel" name="Nivel" radius={[4, 4, 0, 0]}>
-                                                            {inventarioPorCategoriaData.map((entry: any, index: number) => (
+                                                            {inventarioPorCategoriaData.map((entry, index) => (
                                                                 <Cell
                                                                     key={`cell-${index}`}
                                                                     fill={entry.status === 'high' ? '#EF4444' : entry.status === 'low' ? '#22C55E' : '#3B82F6'}
@@ -838,16 +726,16 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                     </Card>
                                 </motion.div>
 
-                                {/* Productos Sin Movimiento - Table */}
+                                {/* Productos de Menor Rotación - Table */}
                                 <motion.div
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ duration: 0.3, delay: 0.25 }}
                                 >
-                                    <Card id="no-movement" className="bg-white dark:bg-[#273043] border-slate-200 dark:border-[#374151] hover:shadow-lg transition-all duration-200 rounded-xl">
+                                    <Card id="low-rotation" className="bg-white dark:bg-[#273043] border-slate-200 dark:border-[#374151] hover:shadow-lg transition-all duration-200 rounded-xl">
                                         <CardHeader>
-                                            <CardTitle className="text-slate-900 dark:text-[#F1F5F9]">Productos Sin Movimiento</CardTitle>
-                                            <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Productos sin ventas recientes - alerta roja</CardDescription>
+                                            <CardTitle className="text-slate-900 dark:text-[#F1F5F9]">Productos de Menor Rotación</CardTitle>
+                                            <CardDescription className="text-slate-600 dark:text-[#E5E7EB]">Inventario con menor velocidad de salida según el contrato real</CardDescription>
                                         </CardHeader>
                                         <CardContent>
                                             <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
@@ -855,24 +743,30 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                                     <thead className="sticky top-0 bg-white dark:bg-[#273043]">
                                                         <tr className="border-b border-slate-200 dark:border-[#374151]">
                                                             <th className="text-left py-2 px-2 text-xs font-medium text-slate-600 dark:text-[#E5E7EB]">Producto</th>
-                                                            <th className="text-left py-2 px-2 text-xs font-medium text-slate-600 dark:text-[#E5E7EB]">Categoría</th>
-                                                            <th className="text-left py-2 px-2 text-xs font-medium text-slate-600 dark:text-[#E5E7EB]">Días</th>
-                                                            <th className="text-left py-2 px-2 text-xs font-medium text-slate-600 dark:text-[#E5E7EB]">Valor</th>
+                                                            <th className="text-left py-2 px-2 text-xs font-medium text-slate-600 dark:text-[#E5E7EB]">Rotación</th>
+                                                            <th className="text-left py-2 px-2 text-xs font-medium text-slate-600 dark:text-[#E5E7EB]">Tipo</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {noMovementProducts.map((product, index) => (
-                                                            <tr key={index} className="border-b border-slate-100 dark:border-[#374151] hover:bg-slate-50 dark:hover:bg-[#334155] transition-colors duration-150">
-                                                                <td className="py-2 px-2 text-sm text-slate-900 dark:text-[#F1F5F9]">{product.producto}</td>
-                                                                <td className="py-2 px-2 text-sm text-slate-600 dark:text-[#E5E7EB]">{product.categoria}</td>
-                                                                <td className="py-2 px-2 text-sm">
-                                                                    <Badge variant="destructive" className="bg-red-100 dark:bg-[#EF4444]/20 text-red-800 dark:text-[#EF4444]">
-                                                                        {product.dias}d
-                                                                    </Badge>
+                                                        {productosMenorRotacion.length === 0 ? (
+                                                            <tr>
+                                                                <td colSpan={3} className="py-6 text-center text-sm text-slate-600 dark:text-[#E5E7EB]">
+                                                                    Sin datos disponibles para este período
                                                                 </td>
-                                                                <td className="py-2 px-2 text-sm font-medium text-slate-900 dark:text-[#F1F5F9]">{product.valor}</td>
                                                             </tr>
-                                                        ))}
+                                                        ) : (
+                                                            productosMenorRotacion.map((product, index) => (
+                                                                <tr key={index} className="border-b border-slate-100 dark:border-[#374151] hover:bg-slate-50 dark:hover:bg-[#334155] transition-colors duration-150">
+                                                                    <td className="py-2 px-2 text-sm text-slate-900 dark:text-[#F1F5F9]">{product.producto}</td>
+                                                                    <td className="py-2 px-2 text-sm font-medium text-slate-900 dark:text-[#F1F5F9]">{product.rotacion}x</td>
+                                                                    <td className="py-2 px-2 text-sm">
+                                                                        <Badge variant="secondary" className="bg-slate-100 dark:bg-[#334155] text-slate-700 dark:text-[#E5E7EB]">
+                                                                            Bajo
+                                                                        </Badge>
+                                                                    </td>
+                                                                </tr>
+                                                            ))
+                                                        )}
                                                     </tbody>
                                                 </table>
                                             </div>
@@ -1069,8 +963,8 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                                 <ResponsiveContainer width="100%" height={300}>
                                                     <BarChart data={tiemposEtapaData}>
                                                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                        <XAxis dataKey="etapa" stroke="#E5E7EB" />
-                                                        <YAxis stroke="#E5E7EB" tickFormatter={(value) => `${value}d`} />
+                                                        <XAxis dataKey="etapa" stroke={axisColor} />
+                                                        <YAxis stroke={axisColor} tickFormatter={(value) => `${value}d`} />
                                                         <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value} días`} />} />
                                                         <Bar dataKey="tiempo" fill="#3B82F6" name="Tiempo" radius={[4, 4, 0, 0]} />
                                                     </BarChart>
@@ -1118,8 +1012,8 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                                 <ResponsiveContainer width="100%" height={300}>
                                                     <BarChart data={flujoCajaArray}>
                                                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                        <XAxis dataKey="month" stroke="#E5E7EB" />
-                                                        <YAxis stroke="#E5E7EB" tickFormatter={(value) => `$${value / 1000}K`} />
+                                                        <XAxis dataKey="month" stroke={axisColor} />
+                                                        <YAxis stroke={axisColor} tickFormatter={(value) => `$${value / 1000}K`} />
                                                         <RechartsTooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
                                                         <Legend />
                                                         <Bar dataKey="entradas" fill="#22C55E" name="Entradas" radius={[4, 4, 0, 0]} />
@@ -1149,8 +1043,8 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                                 <ResponsiveContainer width="100%" height={300}>
                                                     <BarChart data={distribucionGastosData} layout="vertical">
                                                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                        <XAxis type="number" stroke="#E5E7EB" tickFormatter={(value) => `$${value / 1000}K`} />
-                                                        <YAxis dataKey="categoria" type="category" width={100} stroke="#E5E7EB" />
+                                                        <XAxis type="number" stroke={axisColor} tickFormatter={(value) => `$${value / 1000}K`} />
+                                                        <YAxis dataKey="categoria" type="category" width={100} stroke={axisColor} />
                                                         <RechartsTooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
                                                         <Bar dataKey="monto" fill="#3B82F6" name="Monto" radius={[0, 4, 4, 0]} />
                                                     </BarChart>
@@ -1178,8 +1072,8 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                                 <ResponsiveContainer width="100%" height={300}>
                                                     <AreaChart data={rentabilidadHistoricaData}>
                                                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                        <XAxis dataKey="month" stroke="#E5E7EB" angle={-45} textAnchor="end" height={80} />
-                                                        <YAxis stroke="#E5E7EB" tickFormatter={(value) => `${value}%`} />
+                                                        <XAxis dataKey="month" stroke={axisColor} angle={-45} textAnchor="end" height={80} />
+                                                        <YAxis stroke={axisColor} tickFormatter={(value) => `${value}%`} />
                                                         <RechartsTooltip content={<CustomTooltip formatter={(value: number) => `${value}%`} />} />
                                                         <defs>
                                                             <linearGradient id="colorRentabilidad" x1="0" y1="0" x2="0" y2="1">
@@ -1213,8 +1107,8 @@ export function Dashboard({ type = 'ventas', isDarkMode = false }: DashboardProp
                                                 <ResponsiveContainer width="100%" height={300}>
                                                     <LineChart data={proyeccionData}>
                                                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                        <XAxis dataKey="month" stroke="#E5E7EB" />
-                                                        <YAxis stroke="#E5E7EB" tickFormatter={(value) => `$${value / 1000}K`} />
+                                                        <XAxis dataKey="month" stroke={axisColor} />
+                                                        <YAxis stroke={axisColor} tickFormatter={(value) => `$${value / 1000}K`} />
                                                         <RechartsTooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
                                                         <Legend />
                                                         <Line type="monotone" dataKey="real" stroke="#2563eb" strokeWidth={3} name="Real" dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }} connectNulls={false} />
